@@ -77,6 +77,24 @@ def outer_radius(conduit):
     return 0.0
 
 
+def all_or_nothing(doc, action):
+    """Run action() inside a SubTransaction.
+
+    If it raises, everything it changed is rolled back and the exception
+    is re-raised, so one failed box/offset never leaves a half-cut conduit.
+    Must be called inside an open Transaction."""
+    sub = DB.SubTransaction(doc)
+    sub.Start()
+    try:
+        result = action()
+    except Exception:
+        if sub.HasStarted() and not sub.HasEnded():
+            sub.RollBack()
+        raise
+    sub.Commit()
+    return result
+
+
 def conduit_contains(conduit, point, tol=0.01):
     """True when point lies on the conduit's centreline (within tol ft)."""
     curve = conduit.Location.Curve
@@ -126,6 +144,12 @@ def end_connector(element, point):
         if best is None or d < best_d:
             best, best_d = conn, d
     return best
+
+
+def conduit_connectors(element):
+    """Connectors of element in the conduit/cable tray domain only."""
+    return [c for c in connectors(element)
+            if c.Domain == DB.Domain.DomainCableTrayConduit]
 
 
 def connected_others(conn):
@@ -182,10 +206,7 @@ def split_conduit(doc, conduit, point):
     new = new_conduit_like(doc, conduit, point, p1)
     new_far = end_connector(new, p1)
     for other in others:
-        try:
-            new_far.ConnectTo(other)
-        except Exception:
-            pass
+        new_far.ConnectTo(other)
     return new
 
 
@@ -219,12 +240,16 @@ def is_box_like(element):
 
 
 def classify_fitting(fi):
-    """"bend" | "fitting" | "box" | "branch" for a family instance on a run."""
-    conns = connectors(fi)
-    if len(conns) > 2:
-        return "branch"
+    """"bend" | "fitting" | "box" | "branch" for a family instance on a run.
+
+    A box is checked first, so a 3/4-way junction box with only two
+    conduits connected still counts as a box. "branch" means more than two
+    conduit connectors are actually connected."""
     if is_box_like(fi):
         return "box"
+    conns = conduit_connectors(fi)
+    if len([c for c in conns if c.IsConnected]) > 2:
+        return "branch"
     if len(conns) == 2:
         out_a = tup(conns[0].CoordinateSystem.BasisZ)
         out_b = tup(conns[1].CoordinateSystem.BasisZ)
@@ -263,9 +288,9 @@ def trace_run(doc, conduit, start_point):
             exit_conn = end_connector(element, pe)
         else:
             kind = classify_fitting(element)
-            conns = connectors(element)
-            others = [c for c in conns if c.Id != entry.Id]
-            exit_conn = others[0] if len(conns) == 2 else None
+            outs = [c for c in conduit_connectors(element)
+                    if c.Id != entry.Id and c.IsConnected]
+            exit_conn = outs[0] if kind != "branch" and len(outs) == 1 else None
             p_end = exit_conn.Origin if exit_conn is not None else entry.Origin
             items.append({
                 "kind": kind,
@@ -273,7 +298,7 @@ def trace_run(doc, conduit, start_point):
                 "vertical": False, "element": element,
                 "p_start": entry.Origin, "p_end": p_end,
             })
-            if kind == "branch" or exit_conn is None:
+            if exit_conn is None:
                 break
         nxt = connected_others(exit_conn)
         if not nxt:
@@ -288,8 +313,8 @@ def trace_run(doc, conduit, start_point):
 def box_symbols(doc):
     """[(label, FamilySymbol)] for junction/pull box families.
 
-    Only families with "box"/"junction" in the name (or Electrical
-    Fixture/Equipment boxes) when any exist, else every candidate."""
+    Only families with "box"/"junction" in their name when any exist,
+    else every Electrical Fixture / Conduit Fitting / Equipment type."""
     candidates = []
     for sym in DB.FilteredElementCollector(doc).OfClass(DB.FamilySymbol):
         if not _category_is(sym, BOX_CATEGORIES):
@@ -321,45 +346,75 @@ def _set_offset_to(doc, inst, z):
     DB.ElementTransformUtils.MoveElement(doc, inst.Id, DB.XYZ(0, 0, delta))
 
 
+def _rotate_about(doc, inst, point, angle):
+    if abs(math.sin(angle)) > TOL or math.cos(angle) < 0:
+        axis = DB.Line.CreateBound(point, point + DB.XYZ.BasisZ)
+        DB.ElementTransformUtils.RotateElement(doc, inst.Id, axis, angle)
+        doc.Regenerate()
+
+
+def _align_by_connectors(doc, inst, direction, point):
+    """Turn the box so its conduit connectors face along direction, then
+    move it so the midpoint between them sits exactly on point."""
+    first = conduit_connectors(inst)[0].CoordinateSystem.BasisZ
+    turn = math.atan2(direction.Y, direction.X) - math.atan2(first.Y, first.X)
+    _rotate_about(doc, inst, point, turn)
+    a, b = conduit_connectors(inst)
+    mid = a.Origin.Add(b.Origin).Multiply(0.5)
+    shift = point - mid
+    if shift.GetLength() > TOL:
+        DB.ElementTransformUtils.MoveElement(doc, inst.Id, shift)
+        doc.Regenerate()
+    return conduit_connectors(inst)
+
+
+def _lined_up(conns, direction, point, tol=0.01):
+    """True when both connectors sit on the conduit line and face along it."""
+    for conn in conns:
+        offset = conn.Origin - point
+        if offset.CrossProduct(direction).GetLength() > tol:
+            return False
+        if abs(conn.CoordinateSystem.BasisZ.DotProduct(direction)) < 0.999:
+            return False
+    return True
+
+
 def place_box(doc, symbol, conduit, point):
-    """Place a box at point on conduit, aligned with it.
+    """Place a box at point on conduit, lined up with it.
 
-    If the box has exactly two conduit connectors, the conduit is cut and
-    both halves are connected to it.
+    A box with exactly two conduit connectors is turned and moved by its
+    connectors, then the conduit is cut and both halves connected. Any
+    failure during the cut raises, so the caller can roll back this box.
 
-    Returns (instance, connected, new_piece): new_piece is the conduit
-    created by the cut (None when the conduit was not cut)."""
+    Returns (instance, new_piece, note): new_piece is the conduit made by
+    the cut (None when the conduit was not cut) and note says why not."""
     if not symbol.IsActive:
         symbol.Activate()
         doc.Regenerate()
-    level = conduit.ReferenceLevel
-    inst = doc.Create.NewFamilyInstance(point, symbol, level,
+    inst = doc.Create.NewFamilyInstance(point, symbol, conduit.ReferenceLevel,
                                         StructuralType.NonStructural)
     _set_offset_to(doc, inst, point.Z)
 
-    p0, p1 = ends(conduit)
-    direction = p1 - p0
-    angle = math.atan2(direction.Y, direction.X)
-    if abs(angle) > TOL:
-        axis = DB.Line.CreateBound(point, point + DB.XYZ.BasisZ)
-        DB.ElementTransformUtils.RotateElement(doc, inst.Id, axis, angle)
-    doc.Regenerate()
+    start, finish = ends(conduit)
+    direction = (finish - start).Normalize()
+    if len(conduit_connectors(inst)) != 2:
+        _rotate_about(doc, inst, point, math.atan2(direction.Y, direction.X))
+        return inst, None, "the box family does not have two conduit connectors"
 
-    box_conns = [c for c in connectors(inst)
-                 if c.Domain == DB.Domain.DomainCableTrayConduit]
-    if len(box_conns) != 2:
-        return inst, False, None
-    new = None
-    try:
-        new = split_conduit(doc, conduit, point)
-        start, _mid = ends(conduit)
-        _mid2, finish = ends(new)
-        near, far = sorted(box_conns, key=lambda c: c.Origin.DistanceTo(start))
-        set_ends(conduit, start, near.Origin)
-        set_ends(new, far.Origin, finish)
-        doc.Regenerate()
-        end_connector(conduit, near.Origin).ConnectTo(near)
-        end_connector(new, far.Origin).ConnectTo(far)
-        return inst, True, new
-    except Exception:
-        return inst, False, new
+    box_conns = _align_by_connectors(doc, inst, direction, point)
+    if not _lined_up(box_conns, direction, point):
+        return inst, None, "the box connectors do not line up with the conduit"
+
+    near, far = sorted(box_conns, key=lambda c: c.Origin.DistanceTo(start))
+    if (start.DistanceTo(near.Origin) < 0.05
+            or finish.DistanceTo(far.Origin) < 0.05
+            or start.DistanceTo(near.Origin) > start.DistanceTo(point)):
+        raise ValueError("the conduit is too short here for this box")
+
+    new = split_conduit(doc, conduit, point)
+    set_ends(conduit, start, near.Origin)
+    set_ends(new, far.Origin, finish)
+    doc.Regenerate()
+    end_connector(conduit, near.Origin).ConnectTo(near)
+    end_connector(new, far.Origin).ConnectTo(far)
+    return inst, new, None

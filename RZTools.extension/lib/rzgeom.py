@@ -160,7 +160,8 @@ def crossing_sin(da, db):
 
 # ------------------------------------------------------------ pull boxes
 
-def plan_pull_boxes(run, max_dist, max_bends, after_bend, start_bends=0):
+def plan_pull_boxes(run, max_dist, max_bends, after_bend, start_bends=0,
+                    end_margin=0.0):
     """Decide where pull boxes go along a traced conduit run.
 
     run: list of {"kind": "straight"|"bend"|"fitting"|"box"|"branch",
@@ -174,7 +175,17 @@ def plan_pull_boxes(run, max_dist, max_bends, after_bend, start_bends=0):
     the next horizontal straight (mid-length if that straight is shorter
     than 2 * after_bend). An existing box resets both counters. A branch
     ends the walk.
+
+    Every box is kept at least end_margin from both ends of its straight
+    (so it never lands on a joint or off the conduit); a straight shorter
+    than 2 * end_margin gets its box at mid-length. A run that ends exactly
+    on a spacing mark gets no box at its very end.
     """
+    def fit(at, length):
+        if length < 2 * end_margin:
+            return length / 2.0
+        return min(max(at, end_margin), length - end_margin)
+
     boxes = []
     dist = 0.0
     bends = start_bends
@@ -204,10 +215,13 @@ def plan_pull_boxes(run, max_dist, max_bends, after_bend, start_bends=0):
         pos = 0.0
         if pending:
             at = after_bend if length >= 2 * after_bend else length / 2.0
+            at = fit(at, length)
             boxes.append((i, at))
             pos, dist, bends, pending = at, 0.0, 0, False
-        while dist + (length - pos) >= max_dist:
-            at = pos + (max_dist - dist)
+        while dist + (length - pos) > max_dist:
+            at = fit(pos + (max_dist - dist), length)
+            if at <= pos and boxes and boxes[-1][0] == i:
+                break
             boxes.append((i, at))
             pos, dist, bends = at, 0.0, 0
         dist += length - pos

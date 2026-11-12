@@ -14,9 +14,18 @@ def test_type():
 
 
 def test_forbidden():
-    # Review Focus 5
-    assert filter_name("Box: 2-way [20mm]", "T{1}") == "RZ_COLOR_Box_ 2-way _20mm___T_1_"
-    assert filter_name("a\\b|c;d<e>f?g`h~i") == "RZ_COLOR_a_b_c_d_e_f_g_h_i"
+    # Review Focus 5: forbidden characters replaced, plus a short hash
+    name = filter_name("Box: 2-way [20mm]", "T{1}")
+    assert name.startswith("RZ_COLOR_Box_ 2-way _20mm___T_1__")
+    for ch in "\\:{}[]|;<>?`~":
+        assert ch not in name
+
+
+def test_sanitised_names_stay_unique():
+    # final review #5
+    assert filter_name("A[1]") != filter_name("A{1}")
+    assert filter_name("X__Y") != filter_name("X", "Y")
+    assert filter_name("A[1]") == filter_name("A[1]")
 
 
 def test_family_and_type_names_stay_distinct():

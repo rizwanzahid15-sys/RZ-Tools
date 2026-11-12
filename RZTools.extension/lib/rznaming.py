@@ -14,7 +14,9 @@
 """Filter names: RZ_COLOR_<Family> or RZ_COLOR_<Family>__<Type>.
 
 Revit rejects some characters in filter names, so they are replaced
-with "_".
+with "_". Whenever that replacement happens (or a name itself contains
+"__"), a short hash of the real family/type name is appended so two
+different families can never end up sharing one filter.
 """
 
 PREFIX = "RZ_COLOR_"
@@ -26,10 +28,27 @@ def _clean(text):
     return "".join("_" if ch in FORBIDDEN else ch for ch in text)
 
 
+def _short_hash(text):
+    """8-hex-digit FNV-1a hash (stable across Python versions)."""
+    h = 0x811c9dc5
+    for byte in bytearray(text.encode("utf-8")):
+        h ^= byte
+        h = (h * 0x01000193) & 0xffffffff
+    return "%08x" % h
+
+
+def _ambiguous(text):
+    return _clean(text) != text or TYPE_SEP in text
+
+
 def filter_name(family, type_name=None):
     name = PREFIX + _clean(family)
+    raw = family
     if type_name is not None:
         name += TYPE_SEP + _clean(type_name)
+        raw = family + u"\n" + type_name
+    if _ambiguous(family) or (type_name is not None and _ambiguous(type_name)):
+        name += "_" + _short_hash(raw)
     return name
 
 

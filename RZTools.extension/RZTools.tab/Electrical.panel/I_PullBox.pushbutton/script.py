@@ -58,6 +58,7 @@ TITLE = "RZ Tools - Pull Box"
 SECTION = "rztools_pullbox"
 DEFAULTS = {"distance_m": 15.0, "bends": 2, "riser": False, "box_label": ""}
 AFTER_BEND_MM = 300.0
+END_MARGIN_MM = 150.0   # keep boxes this far from conduit joints
 
 doc = revit.doc
 uidoc = revit.uidoc
@@ -105,9 +106,14 @@ class PullBoxDialog(forms.WPFWindow):
 
 
 def place_all(run, boxes, symbol):
-    """Place boxes last-to-first. Returns (placed, connected, skipped)."""
+    """Place boxes last-to-first.
+
+    Each box is all-or-nothing: if cutting/connecting fails, that box is
+    rolled back and listed with the real reason.
+    Returns (placed, connected, not_cut_reasons, skipped)."""
     pieces = {}
     placed = connected = 0
+    not_cut = {}
     skipped = []
     for seg_index, dist in reversed(boxes):
         seg = run[seg_index]
@@ -124,16 +130,18 @@ def place_all(run, boxes, symbol):
                 seg["element"].Id))
             continue
         try:
-            _inst, joined, new_piece = rzconduit.place_box(doc, symbol, host, point)
+            _inst, new_piece, note = rzconduit.all_or_nothing(
+                doc, lambda: rzconduit.place_box(doc, symbol, host, point))
         except Exception as ex:
             skipped.append(u"{}: {}".format(host.Id, ex))
             continue
         placed += 1
-        if joined:
-            connected += 1
         if new_piece is not None:
+            connected += 1
             candidates.append(new_piece)
-    return placed, connected, skipped
+        elif note:
+            not_cut[note] = not_cut.get(note, 0) + 1
+    return placed, connected, not_cut, skipped
 
 
 def main():
@@ -171,7 +179,8 @@ def main():
 
     boxes = rzgeom.plan_pull_boxes(
         run, rzgeom.m_to_ft(opts["distance_m"]), opts["bends"],
-        rzgeom.mm_to_ft(AFTER_BEND_MM), 1 if opts["riser"] else 0)
+        rzgeom.mm_to_ft(AFTER_BEND_MM), 1 if opts["riser"] else 0,
+        end_margin=rzgeom.mm_to_ft(END_MARGIN_MM))
 
     lines = []
     if not boxes:
@@ -181,12 +190,12 @@ def main():
     else:
         with revit.TransactionGroup("RZTools: Pull Box"):
             with revit.Transaction("RZTools: Pull Box"):
-                placed, joined, skipped = place_all(run, boxes, opts["symbol"])
+                placed, _joined, not_cut, skipped = place_all(run, boxes, opts["symbol"])
         lines.append(u"Placed {} pull box(es) along {:.1f} m of conduit with {} bend(s).".format(
             placed, length_m, bend_count))
-        if placed and joined < placed:
-            lines.append(u"{} box(es) were placed without cutting the conduit "
-                         u"(the family does not have two conduit connectors).".format(placed - joined))
+        for reason, count in sorted(not_cut.items()):
+            lines.append(u"{} box(es) were placed without cutting the conduit: {}.".format(
+                count, reason))
     if run and run[-1]["kind"] == "branch":
         lines.append(u"Run branches at {}; stopped there.".format(run[-1]["element"].Id))
     if skipped:

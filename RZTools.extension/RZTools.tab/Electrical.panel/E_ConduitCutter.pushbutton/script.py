@@ -120,7 +120,10 @@ def plan_offset(mover, others, clearance, angle, up):
 
 
 def build_offset(conduit, points):
-    """Rebuild conduit along points; returns list of joints that failed."""
+    """Rebuild conduit along points, joined with elbows.
+
+    Raises on any failure; the caller runs it all-or-nothing so a failed
+    conduit is put back exactly as it was."""
     xyz = rzconduit.xyz
     far = rzconduit.end_connector(conduit, xyz(points[-1]))
     far_links = rzconduit.connected_others(far)
@@ -134,17 +137,14 @@ def build_offset(conduit, points):
 
     last_end = rzconduit.end_connector(pieces[-1], xyz(points[-1]))
     for link in far_links:
-        try:
-            last_end.ConnectTo(link)
-        except Exception:
-            pass
+        last_end.ConnectTo(link)
 
     doc.Regenerate()
-    failed = []
     for a, b in zip(pieces, pieces[1:]):
         if rzconduit.connect_elbow(doc, a, b) is None:
-            failed.append(u"{}: no elbow between {} and {}".format(conduit.Id, a.Id, b.Id))
-    return failed
+            raise ValueError(
+                "Revit could not make an elbow here (check the conduit type's "
+                "elbow family and bend radius, or use a smaller angle)")
 
 
 def choose_movers(groups, runs):
@@ -217,7 +217,8 @@ def main():
                     skipped.append(u"{}: {}".format(mover.conduit.Id, reason))
                     continue
                 try:
-                    skipped.extend(build_offset(mover.conduit, points))
+                    rzconduit.all_or_nothing(
+                        doc, lambda: build_offset(mover.conduit, points))
                 except Exception as ex:
                     skipped.append(u"{}: {}".format(mover.conduit.Id, ex))
                     continue

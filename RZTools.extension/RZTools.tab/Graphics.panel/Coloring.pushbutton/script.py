@@ -236,10 +236,12 @@ class ColorFamilyWindow(forms.WPFWindow):
 
     # ---------- events
     def search_changed(self, sender, args):
-        self.build_tree()
+        if hasattr(self, "families"):   # events can fire while XAML loads
+            self.build_tree()
 
     def filter_changed(self, sender, args):
-        self.build_tree()
+        if hasattr(self, "families"):
+            self.build_tree()
 
     def choose_click(self, sender, args):
         targets = self.targets()
