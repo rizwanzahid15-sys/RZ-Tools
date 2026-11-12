@@ -362,3 +362,124 @@ def route_points(end, target, target_facing):
     if abs(vnorm(target_facing)[2]) > 0.7:
         return [end, (target[0], target[1], end[2]), target]
     return [end, (end[0], end[1], target[2]), target]
+
+
+# ------------------------------------- fillet / dimensions / home run / masks
+
+def _mid(line):
+    return vscale(vadd(line[0], line[1]), 0.5)
+
+
+def _plan_dot(a, b):
+    return a[0] * b[0] + a[1] * b[1]
+
+
+def _away_from(line, corner):
+    """Plan unit direction of line pointing away from corner."""
+    p0, p1 = line
+    far, near = (p0, p1) if _plan_dist(p0, corner) > _plan_dist(p1, corner) else (p1, p0)
+    return _plan_unit(vsub(far, near))
+
+
+def pair_bundles(lines_a, lines_b):
+    """Pair conduits of two bundles meeting at a corner, inner with inner.
+
+    lines: [(p0, p1)]. Returns [(index_in_a, index_in_b)], inner pair first.
+    """
+    if len(lines_a) != len(lines_b) or not lines_a:
+        raise ValueError("bundles have different counts")
+    corner = line_intersection_xy(lines_a[0][0], lines_a[0][1],
+                                  lines_b[0][0], lines_b[0][1])
+    if corner is None:
+        raise ValueError("bundles are parallel")
+    d_a = _away_from(lines_a[0], corner)
+    d_b = _away_from(lines_b[0], corner)
+
+    def inside(line, toward):
+        return _plan_dot(vsub(_mid(line), corner), toward)
+
+    order_a = sorted(range(len(lines_a)), key=lambda i: -inside(lines_a[i], d_b))
+    order_b = sorted(range(len(lines_b)), key=lambda i: -inside(lines_b[i], d_a))
+    return list(zip(order_a, order_b))
+
+
+def _offsets_across(lines):
+    u = _plan_unit(vsub(lines[0][1], lines[0][0]))
+    n = (-u[1], u[0])
+    return u, n, [_plan_dot(_mid(line), n) for line in lines]
+
+
+def bundle_spacing(lines):
+    """Mean distance between neighbouring parallel lines."""
+    if len(lines) < 2:
+        return 0.0
+    _u, _n, offs = _offsets_across(lines)
+    offs = sorted(offs)
+    gaps = [b - a for a, b in zip(offs, offs[1:])]
+    return sum(gaps) / len(gaps)
+
+
+def bundles(lines, gap):
+    """Group parallel lines that sit side by side (offset step <= gap and
+    overlapping along their length). Each group is ordered across."""
+    result = []
+    for group in group_by_direction([vsub(l[1], l[0]) for l in lines]):
+        members = [lines[i] for i in group]
+        u, _n, offs = _offsets_across(members)
+        info = []
+        for k, idx in enumerate(group):
+            a = _plan_dot(lines[idx][0], u)
+            b = _plan_dot(lines[idx][1], u)
+            info.append((offs[k], min(a, b), max(a, b), idx))
+        info.sort()
+        current = [info[0]]
+        for item in info[1:]:
+            prev = current[-1]
+            overlap = min(prev[2], item[2]) - max(prev[1], item[1])
+            if item[0] - prev[0] <= gap and overlap > 0:
+                current.append(item)
+            else:
+                result.append([x[3] for x in current])
+                current = [item]
+        result.append([x[3] for x in current])
+    return sorted(result, key=min)
+
+
+def home_run_label(panel, circuit):
+    """"<panel>-<circuit>", just the panel without a circuit, None without a panel."""
+    if not panel:
+        return None
+    if not circuit:
+        return panel
+    return u"{}-{}".format(panel, circuit)
+
+
+def _rot(v, deg):
+    c, s = math.cos(math.radians(deg)), math.sin(math.radians(deg))
+    return (v[0] * c - v[1] * s, v[0] * s + v[1] * c)
+
+
+def arrow_points(start, toward, length, head):
+    """Home-run arrow in plan: (shaft end, left wing end, right wing end)."""
+    u = _plan_unit(vsub(toward, start))
+    end = (start[0] + u[0] * length, start[1] + u[1] * length, start[2])
+    back = (-u[0], -u[1])
+    wings = []
+    for deg in (-30.0, 30.0):
+        w = _rot(back, deg)
+        wings.append((end[0] + w[0] * head, end[1] + w[1] * head, start[2]))
+    return end, wings[0], wings[1]
+
+
+def mask_rect(center, lower_dir, along, across):
+    """Rectangle (4 points, counter-clockwise) centred on center, `along`
+    measured on lower_dir and `across` perpendicular to it, at center z."""
+    u = _plan_unit(lower_dir)
+    n = (-u[1], u[0])
+    ha, hw = along / 2.0, across / 2.0
+    pts = []
+    for su, sn in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+        pts.append((center[0] + su * ha * u[0] + sn * hw * n[0],
+                    center[1] + su * ha * u[1] + sn * hw * n[1],
+                    center[2]))
+    return pts
