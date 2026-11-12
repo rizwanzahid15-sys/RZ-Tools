@@ -53,6 +53,7 @@ import rzconduit
 
 TITLE = "RZ Tools - Connect Conduit"
 TOL_MM = 5.0
+APPROACH_MM = 300.0   # straight run into a side connector
 
 doc = revit.doc
 uidoc = revit.uidoc
@@ -108,7 +109,9 @@ def connect_conduits(a, ia, b):
 
     corner = rzgeom.line_intersection_xy(a0, a1, b0, b1)
     corner = (corner[0], corner[1], a_end[2])
-    if rzgeom.vdot(rzgeom.vsub(corner, a_other), rzgeom.vsub(a_end, a_other)) <= 0:
+    b_near, b_other = ((b0, b1) if ib == 0 else (b1, b0))
+    if (rzgeom.vdot(rzgeom.vsub(corner, a_other), rzgeom.vsub(a_end, a_other)) <= 0
+            or rzgeom.vdot(rzgeom.vsub(corner, b_other), rzgeom.vsub(b_near, b_other)) <= 0):
         raise ValueError("the conduits point away from each other")
     set_end(a, ia, xyz(corner))
     set_end(b, ib, xyz(corner))
@@ -135,7 +138,8 @@ def connect_device(a, ia, target):
     if conn is None:
         raise ValueError("that element has no free conduit connector")
     points = _dedupe(rzgeom.route_points(
-        tup(end), tup(conn.Origin), tup(conn.CoordinateSystem.BasisZ)))
+        tup(end), tup(conn.Origin), tup(conn.CoordinateSystem.BasisZ),
+        approach=rzgeom.mm_to_ft(APPROACH_MM)))
     if len(points) < 2:
         raise ValueError("the conduit already ends at the connector")
 
@@ -175,17 +179,22 @@ def main():
         return
     ia = end_index(a, ref_a.GlobalPoint)
 
-    try:
-        with revit.TransactionGroup("RZTools: Connect Conduit"):
-            with revit.Transaction("RZTools: Connect Conduit"):
+    result, refusal = None, None
+    with revit.TransactionGroup("RZTools: Connect Conduit"):
+        with revit.Transaction("RZTools: Connect Conduit"):
+            # Refusals are caught inside the transaction (the sub-step is
+            # already rolled back) so they never show up as errors.
+            try:
                 if rzconduit.is_conduit(target):
                     result = rzconduit.all_or_nothing(
                         doc, lambda: connect_conduits(a, ia, target))
                 else:
                     result = rzconduit.all_or_nothing(
                         doc, lambda: connect_device(a, ia, target))
-    except ValueError as reason:
-        forms.alert(u"Not connected: {}.\nNothing was changed.".format(reason), title=TITLE)
+            except ValueError as reason:
+                refusal = reason
+    if refusal is not None:
+        forms.alert(u"Not connected: {}.\nNothing was changed.".format(refusal), title=TITLE)
         return
     done = {"coupling": "Connected with a coupling.",
             "elbow": "Connected with an elbow.",

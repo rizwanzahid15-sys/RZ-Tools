@@ -350,18 +350,29 @@ def line_intersection_xy(a0, a1, b0, b1):
     return (a0[0] + t * rx, a0[1] + t * ry, a0[2])
 
 
-def route_points(end, target, target_facing):
+def route_points(end, target, target_facing, approach=0.0):
     """Conduit path from a conduit end to a device connector.
 
     Same height -> straight. Connector facing up/down -> across first,
     then drop/rise into it. Connector facing sideways -> rise/drop first,
-    then across into it.
+    then across into it; with approach > 0 the path first goes to a point
+    `approach` out in front of the side connector, so the last leg runs
+    straight into it.
     """
-    if abs(target[2] - end[2]) < 1e-3:
-        return [end, target]
-    if abs(vnorm(target_facing)[2]) > 0.7:
+    facing = vnorm(target_facing)
+    if abs(facing[2]) > 0.7:
+        if abs(target[2] - end[2]) < 1e-3:
+            return [end, target]
         return [end, (target[0], target[1], end[2]), target]
-    return [end, (end[0], end[1], target[2]), target]
+    pts = [end]
+    if abs(target[2] - end[2]) >= 1e-3:
+        pts.append((end[0], end[1], target[2]))
+    if approach > 0:
+        flat = _plan_unit(facing)
+        pts.append((target[0] + flat[0] * approach,
+                    target[1] + flat[1] * approach, target[2]))
+    pts.append(target)
+    return pts
 
 
 # ------------------------------------- fillet / dimensions / home run / masks
@@ -483,3 +494,48 @@ def mask_rect(center, lower_dir, along, across):
                     center[1] + su * ha * u[1] + sn * hw * n[1],
                     center[2]))
     return pts
+
+
+# ---------------------------------------------------- review 2 helpers
+
+def dedupe_segments(segments, tol):
+    """Drop segments that repeat an earlier one (either direction)."""
+    out = []
+    for a, b in segments:
+        dup = False
+        for c, d in out:
+            same = vlen(vsub(a, c)) <= tol and vlen(vsub(b, d)) <= tol
+            flipped = vlen(vsub(a, d)) <= tol and vlen(vsub(b, c)) <= tol
+            if same or flipped:
+                dup = True
+                break
+        if not dup:
+            out.append((a, b))
+    return out
+
+
+def snap_joints(segments, pairs):
+    """Move each joined pair of ends onto their midpoint so they coincide.
+
+    pairs: output of joint_pairs. Returns a new list of (p0, p1)."""
+    pts = [list(seg) for seg in segments]
+    for i, ei, j, ej in pairs:
+        mid = vscale(vadd(pts[i][ei], pts[j][ej]), 0.5)
+        pts[i][ei] = mid
+        pts[j][ej] = mid
+    return [(a, b) for a, b in pts]
+
+
+def upper_edges(center, upper_dir, radius, length):
+    """The two side edges of the upper conduit, `length` long, centred on
+    center - redrawn over a Line Cutter mask so the upper conduit stays
+    continuous."""
+    u = _plan_unit(upper_dir)
+    n = (-u[1], u[0])
+    half = length / 2.0
+    edges = []
+    for side in (1, -1):
+        ox, oy = n[0] * radius * side, n[1] * radius * side
+        edges.append(((center[0] + ox - u[0] * half, center[1] + oy - u[1] * half, center[2]),
+                      (center[0] + ox + u[0] * half, center[1] + oy + u[1] * half, center[2])))
+    return edges

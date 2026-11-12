@@ -83,6 +83,9 @@ def place_one(symbol, conduit, pick_point):
     length = rzgeom.vlen(rzgeom.vsub(p1, p0))
     dist = rzgeom.project_distance(p0, p1, rzconduit.tup(pick_point))
     end = rzgeom.snap_end(length, dist, rzgeom.mm_to_ft(END_SNAP_MM))
+    if end is not None and rzconduit.end_connector(
+            conduit, (start, finish)[end]).IsConnected:
+        end = None   # that end already has a fitting - place the box inline
     if end is not None:
         _inst, connected = rzconduit.place_box_at_end(
             doc, symbol, conduit, (start, finish)[end])

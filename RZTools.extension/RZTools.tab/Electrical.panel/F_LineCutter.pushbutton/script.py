@@ -41,6 +41,7 @@
 # Copyright      : (c) Rizwan Zahid. All Rights Reserved
 # ============================================================
 
+import math
 import traceback
 
 from System.Collections.Generic import List
@@ -50,6 +51,7 @@ from Autodesk.Revit.DB.Electrical import Conduit
 
 import rzgeom
 import rzconduit
+import rzcolor
 import rzview
 import rzsettings
 
@@ -57,7 +59,9 @@ TITLE = "RZ Tools - Line Cutter"
 SECTION = "rztools_linecutter"
 MARK = "RZ_LINE_CUTTER"
 MASK_TYPE = "RZ Mask"
+EDGE_STYLE = "RZ Line Cutter"
 SIDE_EXTRA_MM = 20.0
+MIN_SIN = math.sin(math.radians(10.0))
 
 doc = revit.doc
 uidoc = revit.uidoc
@@ -122,20 +126,42 @@ def mask_type():
 
 
 def invisible_line_style():
+    """<Invisible lines> style, found by its built-in id (any language)."""
     lines_cat = doc.Settings.Categories.get_Item(DB.BuiltInCategory.OST_Lines)
+    invisible_id = int(DB.BuiltInCategory.OST_InvisibleLines)
     for sub in lines_cat.SubCategories:
-        if sub.Name == "<Invisible lines>":
+        if rzcolor.eid_int(sub.Id) == invisible_id or sub.Name == "<Invisible lines>":
             return sub.GetGraphicsStyle(DB.GraphicsStyleType.Projection)
     return None
 
 
+def edge_line_style():
+    """Thin black "RZ Line Cutter" line style used to redraw the upper
+    conduit over the mask (created the first time)."""
+    lines_cat = doc.Settings.Categories.get_Item(DB.BuiltInCategory.OST_Lines)
+    for sub in lines_cat.SubCategories:
+        if sub.Name == EDGE_STYLE:
+            return sub.GetGraphicsStyle(DB.GraphicsStyleType.Projection)
+    sub = doc.Settings.Categories.NewSubcategory(lines_cat, EDGE_STYLE)
+    sub.LineColor = DB.Color(0, 0, 0)
+    sub.SetLineWeight(1, DB.GraphicsStyleType.Projection)
+    doc.Regenerate()
+    return sub.GetGraphicsStyle(DB.GraphicsStyleType.Projection)
+
+
 def remove_old_masks(view):
+    """Delete this tool's masks and redrawn edges in view; returns mask count."""
     old = []
     for region in DB.FilteredElementCollector(doc, view.Id).OfClass(DB.FilledRegion):
         param = region.get_Parameter(DB.BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)
         if param is not None and param.AsString() == MARK:
             old.append(region.Id)
-    for eid in old:
+    edges = []
+    for curve in DB.FilteredElementCollector(doc, view.Id).OfClass(DB.CurveElement):
+        style = getattr(curve, "LineStyle", None)
+        if style is not None and style.Name == EDGE_STYLE:
+            edges.append(curve.Id)
+    for eid in old + edges:
         doc.Delete(eid)
     return len(old)
 
@@ -156,13 +182,15 @@ def crossings(runs, gap):
             lower, upper = (a, b) if top_a < top_b else (b, a)
             center = rzgeom.point_along(a.p0, a.p1, t * rzgeom.vlen(a.dir))
             sin = rzgeom.crossing_sin(lower.dir, upper.dir)
+            if sin < MIN_SIN:
+                continue   # nearly parallel - a mask would be huge
             along = (2 * upper.r + 2 * gap) / sin
             across = 2 * lower.r + rzgeom.mm_to_ft(SIDE_EXTRA_MM)
-            found.append((center, lower, along, across))
+            found.append((center, lower, upper, along, across))
     return found
 
 
-def make_mask(view, type_id, style, center, lower, along, across):
+def make_mask(view, type_id, style, edge_style, center, lower, upper, along, across):
     z = rzview.plan_z(view)
     pts = [rzview.at_z(p, z) for p in rzgeom.mask_rect(center, lower.dir, along, across)]
     loop = DB.CurveLoop()
@@ -177,6 +205,12 @@ def make_mask(view, type_id, style, center, lower, along, across):
         except Exception:
             pass
     region.get_Parameter(DB.BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS).Set(MARK)
+    # The mask covers everything under it, including the upper conduit,
+    # so redraw the upper conduit's two edges on top of the mask.
+    reach = math.hypot(along, across) + 2 * upper.r
+    for a, b in rzgeom.upper_edges(center, upper.dir, upper.r, reach):
+        line = rzview.detail_line(doc, view, rzview.at_z(a, z), rzview.at_z(b, z))
+        line.LineStyle = edge_style
     return region
 
 
@@ -199,10 +233,12 @@ def main():
             if found:
                 type_id = mask_type().Id
                 style = invisible_line_style()
-                for center, lower, along, across in found:
+                edges = edge_line_style()
+                for center, lower, upper, along, across in found:
                     try:
                         rzconduit.all_or_nothing(doc, lambda: make_mask(
-                            view, type_id, style, center, lower, along, across))
+                            view, type_id, style, edges, center, lower, upper,
+                            along, across))
                         made += 1
                     except Exception as ex:
                         skipped.append(u"crossing on {}: {}".format(lower.conduit.Id, ex))

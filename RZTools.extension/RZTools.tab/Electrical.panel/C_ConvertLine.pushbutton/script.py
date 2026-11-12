@@ -203,6 +203,8 @@ def main():
             flat.append((p0, p1))
         else:
             skipped_curves += 1
+    # The same CAD polyline comes back once per picked segment - drop repeats.
+    flat = rzgeom.dedupe_segments(flat, rzgeom.mm_to_ft(1.0))
     if not flat:
         forms.alert("No straight lines to convert.", title=TITLE)
         return
@@ -216,6 +218,10 @@ def main():
 
     diameter = rzgeom.mm_to_ft(opts["diameter_mm"])
     offset = rzgeom.mm_to_ft(opts["elevation_mm"])
+    joints = rzgeom.joint_pairs(flat, rzgeom.mm_to_ft(JOINT_TOL_MM))
+    if opts["fittings"]:
+        # Fittings need the two ends to meet exactly - close small CAD gaps.
+        flat = rzgeom.snap_joints(flat, joints)
     conduits = []
     failed = []
     fittings = 0
@@ -232,7 +238,7 @@ def main():
                     failed.append(u"line {}: {}".format(len(conduits), ex))
             doc.Regenerate()
             if opts["fittings"]:
-                for i, _ei, j, _ej in rzgeom.joint_pairs(flat, rzgeom.mm_to_ft(JOINT_TOL_MM)):
+                for i, _ei, j, _ej in joints:
                     a, b = conduits[i], conduits[j]
                     if a is None or b is None:
                         continue

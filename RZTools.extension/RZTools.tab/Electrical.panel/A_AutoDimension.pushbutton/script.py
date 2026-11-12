@@ -89,9 +89,11 @@ def conduits_in_scope(view):
     return keep
 
 
-def grid_candidates():
+def grid_candidates(view):
+    """Grids visible in this view only (hidden / out-of-scope grids can't
+    be dimensioned)."""
     out = []
-    for grid in DB.FilteredElementCollector(doc).OfClass(DB.Grid):
+    for grid in DB.FilteredElementCollector(doc, view.Id).OfClass(DB.Grid):
         curve = grid.Curve
         if isinstance(curve, DB.Line):
             out.append((DB.Reference(grid), tup(curve.GetEndPoint(0)),
@@ -132,18 +134,29 @@ def nearest_parallel(candidates, mid, u, n, limit):
 
 
 def dimension_bundle(view, members, along_offset, grids, walls):
+    """Dimension one bundle to the nearest grid; if Revit refuses that
+    grid, try the nearest wall face instead."""
     lines = [tuple(tup(p) for p in rzconduit.ends(c)) for c in members]
     first = lines[0]
     u = _plan_unit(rzgeom.vsub(first[1], first[0]))
     n = (-u[1], u[0])
     mid = rzgeom.vscale(rzgeom.vadd(first[0], first[1]), 0.5)
     limit = rzgeom.m_to_ft(SEARCH_M)
-    target = nearest_parallel(grids, mid, u, n, limit) or \
-        nearest_parallel(walls, mid, u, n, limit)
-    if target is None:
+    targets = [t for t in (nearest_parallel(grids, mid, u, n, limit),
+                           nearest_parallel(walls, mid, u, n, limit)) if t is not None]
+    if not targets:
         raise ValueError("no parallel grid or wall within {:g} m".format(SEARCH_M))
-    ref, ref_across = target
+    problem = None
+    for ref, ref_across in targets:
+        try:
+            return rzconduit.all_or_nothing(doc, lambda: _make_dimension(
+                view, members, lines, mid, u, n, ref, ref_across, along_offset))
+        except Exception as ex:
+            problem = ex
+    raise ValueError("Revit could not dimension to the grid or wall ({})".format(problem))
 
+
+def _make_dimension(view, members, lines, mid, u, n, ref, ref_across, along_offset):
     positions = [ref_across]
     refs = DB.ReferenceArray()
     refs.Append(ref)
@@ -179,7 +192,7 @@ def main():
     along = rzgeom.mm_to_ft(rzsettings.load(SECTION, {"offset_mm": 500.0})["offset_mm"])
     lines = [tuple(tup(p) for p in rzconduit.ends(c)) for c in conduits]
     groups = rzgeom.bundles(lines, rzgeom.mm_to_ft(BUNDLE_GAP_MM))
-    grids = grid_candidates()
+    grids = grid_candidates(view)
     walls = wall_face_candidates(view)
 
     made, skipped = 0, []

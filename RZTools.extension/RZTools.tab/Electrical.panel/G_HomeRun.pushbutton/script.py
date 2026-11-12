@@ -48,6 +48,7 @@ from Autodesk.Revit.UI.Selection import ObjectType, ISelectionFilter
 from Autodesk.Revit.Exceptions import OperationCanceledException
 
 import rzgeom
+import rzconduit
 import rzview
 import rzsettings
 
@@ -76,7 +77,8 @@ def circuit_of(device):
     systems = getter() if getter is not None else getattr(mep, "ElectricalSystems", None)
     for system in (list(systems) if systems else []):
         panel = system.BaseEquipment
-        if panel is not None:
+        # A sub-panel also "has" the circuits it feeds; skip those.
+        if panel is not None and panel.Id != device.Id:
             return system.PanelName, system.CircuitNumber, panel
     return None
 
@@ -129,11 +131,14 @@ def main():
             except OperationCanceledException:
                 break
             device = doc.GetElement(ref.ElementId)
-            try:
-                with revit.Transaction("RZTools: Home Run"):
-                    drawn.append(draw(view, device, length))
-            except ValueError as reason:
-                skipped.append(u"{}: {}".format(device.Id, reason))
+            with revit.Transaction("RZTools: Home Run"):
+                # Caught inside the transaction so a skipped device never
+                # shows as an error, and never undoes earlier home runs.
+                try:
+                    drawn.append(rzconduit.all_or_nothing(
+                        doc, lambda: draw(view, device, length)))
+                except Exception as reason:
+                    skipped.append(u"{}: {}".format(device.Id, reason))
 
     if drawn or skipped:
         lines = [u"Drew {} home run(s): {}".format(len(drawn), u", ".join(drawn))]

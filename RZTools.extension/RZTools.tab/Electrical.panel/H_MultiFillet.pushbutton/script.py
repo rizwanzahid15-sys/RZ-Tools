@@ -119,6 +119,10 @@ def main():
                     "({} and {} selected).".format(len(group_a), len(group_b)), title=TITLE)
         return
     lines_a, lines_b = as_lines(group_a), as_lines(group_b)
+    if any(rzgeom.is_vertical(rzgeom.vsub(l[1], l[0])) for l in lines_a + lines_b):
+        forms.alert("Select horizontal conduits only (a vertical conduit was picked).",
+                    title=TITLE)
+        return
     if (len(rzgeom.group_by_direction([rzgeom.vsub(l[1], l[0]) for l in lines_a])) != 1
             or len(rzgeom.group_by_direction([rzgeom.vsub(l[1], l[0]) for l in lines_b])) != 1):
         forms.alert("Each group must be conduits running in the same direction.", title=TITLE)
@@ -144,10 +148,17 @@ def main():
                     skipped.append(u"{} / {}: {}".format(a.Id, b.Id, ex))
                     continue
                 made += 1
-                param = elbow.LookupParameter(RADIUS_PARAM)
-                if inner_radius is None and param is not None:
-                    inner_radius = param.AsDouble()
-                if inner_radius is not None and k > 0:
+                if k == 0:
+                    # Radii grow from the INNER pair only; if it failed,
+                    # the others keep the elbow family's own radius.
+                    doc.Regenerate()
+                    param = elbow.LookupParameter(RADIUS_PARAM)
+                    inner_radius = param.AsDouble() if param is not None else None
+                    if param is None:
+                        radius_note = True
+                elif inner_radius is None:
+                    radius_note = True
+                else:
                     try:
                         if not rzconduit.all_or_nothing(
                                 doc, lambda: set_radius(elbow, inner_radius + k * spacing)):
