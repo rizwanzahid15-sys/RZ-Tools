@@ -1,4 +1,6 @@
-# Pull Box — test checklist (Revit 2025)
+# Pull Box — test checklist
+
+Tested on Revit version: ______  pyRevit version: ______
 
 Setup: a junction box family with "box" in its name and **two conduit
 connectors** (a through / 2-way box) loaded; a conduit run from a panel with

@@ -1,4 +1,6 @@
-# Conduit Cutter — test checklist (Revit 2025)
+# Conduit Cutter — test checklist
+
+Tested on Revit version: ______  pyRevit version: ______
 
 Setup: 4 parallel conduits running east–west at one height, crossed by 2
 conduits running north–south at the same height (a clash). Conduit type has

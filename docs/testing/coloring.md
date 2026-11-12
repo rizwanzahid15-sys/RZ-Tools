@@ -1,6 +1,8 @@
-# Coloring — test checklist (Revit 2025)
+# Coloring — test checklist
 
-Setup: a project with lighting fixtures of 2+ types, conduits, a few floor
+Tested on Revit version: ______  pyRevit version: ______
+
+Setup (any Revit 2020-2027): a project with lighting fixtures of 2+ types, conduits, a few floor
 plans (some with a view template, one without) and a 3D view.
 
 | # | Do this | Expect |

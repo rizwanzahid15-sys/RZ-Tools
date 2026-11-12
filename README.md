@@ -84,6 +84,53 @@ type's fitting settings.
 
 **Shift+click** Conduit Cutter to change the clearance (mm) and elbow angle.
 
+### Junction Box
+Pick the box type (your last one is listed first), then click conduits. A
+click mid-run places the box there — a 2-way box cuts the conduit and is
+connected to both sides. A click within 300 mm of a conduit end puts the box
+on the end and connects it. Esc to finish.
+
+### Convert Line
+Choose **Revit lines** (model/detail lines — pre-select or pick) or **CAD
+lines** (pick lines inside a linked/imported DWG). Then pick the conduit
+type, diameter and middle elevation above the current plan's level. Every
+straight line becomes a conduit; where lines touch, an elbow (corner) or
+coupling (straight on) is added. Arcs are skipped and counted. Your lines are
+left in place.
+
+### Connect Conduit
+Click a conduit near the end you want to connect, then click the target:
+- **another conduit in line** → joined with a coupling;
+- **another conduit at an angle** (same height) → both trimmed/extended to
+  the corner and joined with an elbow;
+- **a device or box** → a conduit route into its free conduit connector
+  (across then down for a top/bottom connector, down then across for a side
+  connector).
+Anything else is refused with a reason and nothing changes.
+
+### Multi Fillet
+Select the first group of parallel conduits (Finish), then the second group
+(Finish). Each pair is trimmed/extended to its corner and joined with an
+elbow — inner with inner, whatever order you picked them in. If the elbow
+family has a writable **Bend Radius**, the bends are made concentric.
+
+### Home Run (plan views)
+Click circuited devices. For each one an arrow is drawn toward its panel with
+a `Panel-Circuit` text note (e.g. `LP-1-3,5`). Devices with no circuit are
+listed and skipped. **Shift+click** to set the arrow length (default 600 mm).
+
+### Auto Dimension (plan views)
+Dimensions the selected conduits — or every conduit in the view — to the
+nearest parallel grid (or wall face if no grid is within 10 m). Side-by-side
+conduits get one dimension string. **Shift+click** to set how far from the
+conduit midpoint the dimension sits (default 500 mm).
+
+### Line Cutter (plan views)
+Where one conduit passes over another, a small white "RZ Mask" region hides
+the lower one so the crossing reads clearly. Only the view changes. Running it
+again replaces the masks it made before in that view. **Shift+click** to set
+the gap each side of the upper conduit (default 50 mm).
+
 ## Install
 
 1. In Revit, open **pyRevit tab → Settings**.
@@ -104,8 +151,15 @@ RZTools.extension/
       Clear.pushbutton/
       D_RedlineMarkup.pushbutton/   (D_ prefix forces ribbon order: Clear, Redline, Blue)
       E_BlueMarkup.pushbutton/
-    Electrical.panel/
+    Electrical.panel/               (A_ ... I_ prefixes set the ribbon order)
+      A_AutoDimension.pushbutton/
+      B_ConnectConduit.pushbutton/
+      C_ConvertLine.pushbutton/
+      D_JunctionBox.pushbutton/
       E_ConduitCutter.pushbutton/   (config.py = Shift+click settings)
+      F_LineCutter.pushbutton/
+      G_HomeRun.pushbutton/
+      H_MultiFillet.pushbutton/
       I_PullBox.pushbutton/
     Graphics.panel/
       Coloring.pushbutton/
@@ -114,6 +168,7 @@ RZTools.extension/
     rzgeom.py, rznaming.py          (pure maths/naming - tested offline)
     rzconduit.py, rzcolor.py        (Revit conduit and colour helpers)
     rzsettings.py                   (remembered settings)
+    rzview.py                       (plan-view / annotation helpers)
 tests/                              (pytest tests for rzgeom / rznaming)
 docs/testing/                       (manual test checklists for Revit)
 ```
