@@ -1,0 +1,6 @@
+title: Line Cutter
+tooltip: >-
+  In a plan view, hide the lower conduit where another passes over it, so
+  crossings read clearly. View-only white masks; re-run to refresh.
+  Shift+click to set the gap. RZ Tools.
+author: Rizwan Zahid
