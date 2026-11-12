@@ -1,0 +1,6 @@
+title: Junction Box
+tooltip: >-
+  Click conduits to place junction boxes. A 2-way box mid-run cuts the
+  conduit and connects both sides; a click near a conduit end puts the box
+  on the end and connects it. Esc to finish. RZ Tools.
+author: Rizwan Zahid
