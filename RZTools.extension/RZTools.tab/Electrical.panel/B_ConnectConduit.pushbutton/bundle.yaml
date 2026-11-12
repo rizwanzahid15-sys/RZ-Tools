@@ -1,0 +1,6 @@
+title: Connect Conduit
+tooltip: >-
+  Click a conduit near its end, then the conduit or device to connect to.
+  In-line conduits get a coupling, crossing ones an elbow; a device gets a
+  routed conduit into its free connector. RZ Tools.
+author: Rizwan Zahid
