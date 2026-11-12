@@ -13,3 +13,5 @@ device not on any circuit.
 | 4 | Shift+click, set 1000 | Next arrows are 1000 mm |
 | 5 | Ctrl+Z after a run with several devices | All arrows and notes from that run removed |
 | 6 | Test on Revit 2020 and on 2022+ | Works on both (different circuit API) |
+| 7 | Click a device that is not on a circuit | Listed in the message; no red error window |
+| 8 | Click a sub-panel | Arrow points to the panel that feeds it, not to a circuit it feeds |

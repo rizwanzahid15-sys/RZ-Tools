@@ -12,3 +12,4 @@ parallel conduits running north, same height, forming an L corner.
 | 3 | Look at the bends | Concentric if the elbow family has a writable Bend Radius; otherwise message says they may not be |
 | 4 | Two groups running the same direction | "…they don't meet at a corner." |
 | 5 | Ctrl+Z | All back as before |
+| 6 | Pick a vertical conduit in a group | "Select horizontal conduits only…" |

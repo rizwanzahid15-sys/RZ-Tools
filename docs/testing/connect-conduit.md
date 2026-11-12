@@ -15,3 +15,4 @@ a side connector, both lower than a conduit.
 | 5 | Two parallel conduits side by side (not in line) | "Not connected: these conduits are parallel but not in line. Nothing was changed." |
 | 6 | Click an end that is already connected | Refused with reason, nothing changed |
 | 7 | Ctrl+Z after a success | Back to how it was |
+| 8 | Side connector at a different height | Last 300 mm runs straight into the connector (not at an angle) |

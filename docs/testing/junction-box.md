@@ -14,3 +14,4 @@ end box family loaded; a few straight conduits.
 | 5 | Ctrl+Z once | Every box from the run removed, conduits whole again |
 | 6 | Run again | Last box type is listed first |
 | 7 | Use a box whose connectors run along Y in the family | Still lines up (turned by its connectors), or reported as "could not be connected" — never a diagonal stub |
+| 8 | Click near an end that already has an elbow | Box is placed inline near that end, not on the end |

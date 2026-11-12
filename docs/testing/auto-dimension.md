@@ -13,3 +13,5 @@ bundle 8 m away; one conduit far from any grid but near a wall.
 | 4 | Select only one bundle and run | Only that bundle dimensioned |
 | 5 | Shift+click, set 1500 | Dimension line sits 1500 mm along the run from the midpoint |
 | 6 | Ctrl+Z | All dimensions from the run removed |
+| 7 | **Important:** check the dimension really snaps to the conduit centreline | Witness line on each conduit centre. If Revit refuses conduit references, every bundle is listed as skipped - report this |
+| 8 | A grid hidden in this view near the conduits | Not used; the next visible grid or a wall is used |

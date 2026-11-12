@@ -13,3 +13,6 @@ line, one arc; a linked DWG with lines.
 | 4 | CAD lines → pick DWG lines | Conduits lie exactly on the DWG lines (not offset) |
 | 5 | Ctrl+Z | All new conduits gone; original lines still there |
 | 6 | Run again | Dialog shows last values |
+| 7 | Pick two segments of the same DWG polyline | One conduit per segment (no doubles) |
+| 8 | DWG lines with a 1-5 mm gap at a corner | Elbow still added |
+| 9 | Type a diameter that is not a catalogue size (e.g. 23) | Note what Revit does (rounds to a size or keeps 23) |
