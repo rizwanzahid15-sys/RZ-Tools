@@ -7,7 +7,16 @@ and conduit automation (pull boxes, crossing offsets).
 - **Electrical** tools change the model (they place boxes and cut conduits).
   Every Electrical run is one undo step — a single **Ctrl+Z** reverses it.
 
-## Markup panel
+## Ribbon layout
+
+The **RZ Tools** tab uses compact small buttons, stacked three high:
+
+| Panel | Column 1 | Column 2 | Column 3 |
+|---|---|---|---|
+| **Electrical** | Connect Conduit, Convert Line, Multi Fillet | Junction Box, Pull Box, Conduit Cutter | Auto Dimension, Home Run, Line Cutter |
+| **Graphics** | Coloring, **Markup ▾** (Redline Markup, Blue Markup, Clear) | | |
+
+## Markup (Graphics panel → Markup ▾)
 
 Every Markup tool changes only a **view-specific graphic override**
 (`View.SetElementOverrides`). Nothing about the element itself — its material,
@@ -16,7 +25,7 @@ to reverse: undo one at a time with Ctrl+Z, or run **Clear** to remove them.
 
 ### Tools
 
-All three live on the **RZ Tools** ribbon tab, **Markup** panel.
+All three are in the **Markup ▾** dropdown on the **Graphics** panel.
 
 ### Redline Markup
 Turns elements red in the active view.
@@ -139,39 +148,47 @@ the gap each side of the upper conduit (default 50 mm).
 3. **Save Settings**, then fully close and reopen Revit (a plain
    **Reload** is not enough after adding a new extension directory for the
    first time).
-4. The **RZ Tools** tab should appear with the **Markup**, **Electrical** and
-   **Graphics** panels.
+4. The **RZ Tools** tab should appear with the **Electrical** and **Graphics**
+   panels.
 
 ## Structure
 
 ```
 RZTools.extension/
   RZTools.tab/
-    Markup.panel/
-      Clear.pushbutton/
-      D_RedlineMarkup.pushbutton/   (D_ prefix forces ribbon order: Clear, Redline, Blue)
-      E_BlueMarkup.pushbutton/
-    Electrical.panel/               (A_ ... I_ prefixes set the ribbon order)
-      A_AutoDimension.pushbutton/
-      B_ConnectConduit.pushbutton/
-      C_ConvertLine.pushbutton/
-      D_JunctionBox.pushbutton/
-      E_ConduitCutter.pushbutton/   (config.py = Shift+click settings)
-      F_LineCutter.pushbutton/
-      G_HomeRun.pushbutton/
-      H_MultiFillet.pushbutton/
-      I_PullBox.pushbutton/
+    Electrical.panel/
+      A.stack/                      (column 1 - stack folders keep paths short)
+        A_ConnectConduit.pushbutton/
+        B_ConvertLine.pushbutton/
+        C_MultiFillet.pushbutton/
+      B.stack/
+        A_JunctionBox.pushbutton/
+        B_PullBox.pushbutton/
+        C_ConduitCutter.pushbutton/ (config.py = Shift+click settings)
+      C.stack/
+        A_AutoDimension.pushbutton/ (config.py)
+        B_HomeRun.pushbutton/       (config.py)
+        C_LineCutter.pushbutton/    (config.py)
     Graphics.panel/
-      Coloring.pushbutton/
+      A.stack/
+        A_Coloring.pushbutton/
+        B_Markup.pulldown/
+          A_RedlineMarkup.pushbutton/
+          B_BlueMarkup.pushbutton/
+          C_Clear.pushbutton/
   lib/
     rztools_markup.py               (Markup tools)
     rzgeom.py, rznaming.py          (pure maths/naming - tested offline)
     rzconduit.py, rzcolor.py        (Revit conduit and colour helpers)
     rzsettings.py                   (remembered settings)
     rzview.py                       (plan-view / annotation helpers)
-tests/                              (pytest tests for rzgeom / rznaming)
+tests/                              (pytest: maths, naming, ribbon layout)
 docs/testing/                       (manual test checklists for Revit)
 ```
+
+The A_/B_/C_ prefixes set the order. Keep folder names short: Windows
+can't open files whose full path is longer than 260 characters, and
+`tests/test_ribbon_layout.py` checks for that.
 
 ## Offline tests
 
