@@ -96,3 +96,63 @@ def is_vertical(direction, max_deg=45.0):
 def point_along(p0, p1, dist):
     """Point at dist from p0, toward p1."""
     return vadd(p0, vscale(vnorm(vsub(p1, p0)), dist))
+
+
+# ----------------------------------------------------------------- plan
+
+def _plan_dist(a, b):
+    return math.hypot(a[0] - b[0], a[1] - b[1])
+
+
+def nearest_end(p0, p1, pick):
+    """0 if p0 is nearer the picked point in plan, else 1."""
+    return 0 if _plan_dist(p0, pick) <= _plan_dist(p1, pick) else 1
+
+
+def _plan_unit(d):
+    length = math.hypot(d[0], d[1])
+    if length < 1e-12:
+        raise ValueError("direction has no plan component")
+    return (d[0] / length, d[1] / length)
+
+
+def group_by_direction(dirs, tol_deg=5.0):
+    """Group directions that are parallel in plan (d and -d are the same).
+
+    Returns lists of indices, ordered by each group's first index.
+    """
+    groups = []   # each: [reference unit, [indices]]
+    limit = math.cos(math.radians(tol_deg))
+    for i, d in enumerate(dirs):
+        u = _plan_unit(d)
+        for ref, members in groups:
+            if abs(ref[0] * u[0] + ref[1] * u[1]) >= limit:
+                members.append(i)
+                break
+        else:
+            groups.append([u, [i]])
+    return [members for _ref, members in groups]
+
+
+def plan_intersection(a0, a1, b0, b1):
+    """Where segments a and b cross in plan, as (t, u) params 0-1.
+
+    None if they are parallel or do not cross inside both segments.
+    """
+    rx, ry = a1[0] - a0[0], a1[1] - a0[1]
+    sx, sy = b1[0] - b0[0], b1[1] - b0[1]
+    denom = rx * sy - ry * sx
+    if abs(denom) < 1e-12:
+        return None
+    qx, qy = b0[0] - a0[0], b0[1] - a0[1]
+    t = (qx * sy - qy * sx) / denom
+    u = (qx * ry - qy * rx) / denom
+    if 0.0 <= t <= 1.0 and 0.0 <= u <= 1.0:
+        return (t, u)
+    return None
+
+
+def crossing_sin(da, db):
+    """|sin| of the plan angle between two directions."""
+    ua, ub = _plan_unit(da), _plan_unit(db)
+    return abs(ua[0] * ub[1] - ua[1] * ub[0])
