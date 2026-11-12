@@ -281,3 +281,84 @@ def dogleg_polyline(p0, p1, spans, rise, run):
         pts.append(point_along(p0, p1, e0))
     pts.append(p1)
     return pts
+
+
+# ------------------------------------------- junction box / connect / convert
+
+def project_distance(p0, p1, point):
+    """Distance from p0 along p0->p1 of point's projection, clamped."""
+    d = vsub(p1, p0)
+    length = vlen(d)
+    along = vdot(vsub(point, p0), vnorm(d))
+    return max(0.0, min(length, along))
+
+
+def snap_end(length, dist, snap):
+    """0 / 1 when dist is within snap of the start / end, else None."""
+    if dist <= snap:
+        return 0
+    if dist >= length - snap:
+        return 1
+    return None
+
+
+def joint_pairs(segments, tol):
+    """Ends of different segments that touch (within tol).
+
+    segments: [(p0, p1)]. Returns [(i, end_i, j, end_j)] with i < j;
+    each end joins at most one other end.
+    """
+    used = set()
+    pairs = []
+    for i in range(len(segments)):
+        for ei in (0, 1):
+            if (i, ei) in used:
+                continue
+            for j in range(i + 1, len(segments)):
+                match = None
+                for ej in (0, 1):
+                    if (j, ej) in used:
+                        continue
+                    if vlen(vsub(segments[i][ei], segments[j][ej])) <= tol:
+                        match = ej
+                        break
+                if match is not None:
+                    used.add((i, ei))
+                    used.add((j, match))
+                    pairs.append((i, ei, j, match))
+                    break
+    return pairs
+
+
+def joint_kind(dir_a, dir_b, tol_deg=1.0):
+    """"union" for a straight continuation, else "elbow"."""
+    ua, ub = _plan_unit(dir_a), _plan_unit(dir_b)
+    if abs(ua[0] * ub[0] + ua[1] * ub[1]) >= math.cos(math.radians(tol_deg)):
+        return "union"
+    return "elbow"
+
+
+def line_intersection_xy(a0, a1, b0, b1):
+    """Plan intersection of the two infinite lines (z from a0); None if parallel."""
+    rx, ry = a1[0] - a0[0], a1[1] - a0[1]
+    sx, sy = b1[0] - b0[0], b1[1] - b0[1]
+    denom = rx * sy - ry * sx
+    if abs(denom) < 1e-12:
+        return None
+    qx, qy = b0[0] - a0[0], b0[1] - a0[1]
+    t = (qx * sy - qy * sx) / denom
+    return (a0[0] + t * rx, a0[1] + t * ry, a0[2])
+
+
+def route_points(end, target, target_facing):
+    """Conduit path from a conduit end to a device connector.
+
+    Same height -> straight. Connector facing up/down -> across first,
+    then drop/rise into it. Connector facing sideways -> rise/drop first,
+    then across into it.
+    """
+    if abs(target[2] - end[2]) < 1e-3:
+        return [end, target]
+    if abs(vnorm(target_facing)[2]) > 0.7:
+        return [end, (target[0], target[1], end[2]), target]
+    return [end, (end[0], end[1], target[2]), target]
