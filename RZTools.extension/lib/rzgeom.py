@@ -156,3 +156,59 @@ def crossing_sin(da, db):
     """|sin| of the plan angle between two directions."""
     ua, ub = _plan_unit(da), _plan_unit(db)
     return abs(ua[0] * ub[1] - ua[1] * ub[0])
+
+
+# ------------------------------------------------------------ pull boxes
+
+def plan_pull_boxes(run, max_dist, max_bends, after_bend, start_bends=0):
+    """Decide where pull boxes go along a traced conduit run.
+
+    run: list of {"kind": "straight"|"bend"|"fitting"|"box"|"branch",
+                  "length": float, "vertical": bool}
+    Returns [(segment_index, distance_along_segment)] - boxes only ever
+    land on horizontal straight segments.
+
+    Rules: a box is owed when the distance since the last box reaches
+    max_dist, or when the bend count reaches max_bends. A box owed by
+    bends (or owed while on a vertical riser) is placed after_bend into
+    the next horizontal straight (mid-length if that straight is shorter
+    than 2 * after_bend). An existing box resets both counters. A branch
+    ends the walk.
+    """
+    boxes = []
+    dist = 0.0
+    bends = start_bends
+    pending = False
+    for i, seg in enumerate(run):
+        kind = seg["kind"]
+        length = float(seg.get("length", 0.0))
+        if kind == "branch":
+            break
+        if kind == "box":
+            dist, bends, pending = 0.0, 0, False
+            continue
+        if kind == "bend":
+            dist += length
+            bends += 1
+            if bends >= max_bends:
+                pending = True
+            continue
+        if kind != "straight":
+            dist += length
+            continue
+        if seg.get("vertical"):
+            dist += length
+            if dist >= max_dist:
+                pending = True
+            continue
+        pos = 0.0
+        if pending:
+            at = after_bend if length >= 2 * after_bend else length / 2.0
+            boxes.append((i, at))
+            pos, dist, bends, pending = at, 0.0, 0, False
+        while dist + (length - pos) >= max_dist:
+            at = pos + (max_dist - dist)
+            boxes.append((i, at))
+            pos, dist, bends = at, 0.0, 0
+        dist += length - pos
+    return boxes
