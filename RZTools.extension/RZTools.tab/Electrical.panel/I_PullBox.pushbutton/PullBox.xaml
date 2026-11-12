@@ -1,0 +1,27 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Pull Box" Width="420" SizeToContent="Height"
+        ResizeMode="NoResize" WindowStartupLocation="CenterScreen" ShowInTaskbar="False">
+    <StackPanel Margin="14">
+        <TextBlock Text="Distance between pull boxes (m)" FontWeight="SemiBold"/>
+        <TextBox x:Name="distance" Height="24" Margin="0,4,0,10"/>
+
+        <TextBlock Text="Bends before a pull box" FontWeight="SemiBold"/>
+        <TextBox x:Name="bends" Height="24" Margin="0,4,0,8"/>
+
+        <CheckBox x:Name="riser" Margin="0,0,0,10">
+            <TextBlock TextWrapping="Wrap"
+                       Text="The panel riser bend is hidden in plan, so it counts as the first bend"/>
+        </CheckBox>
+
+        <TextBlock Text="Junction box" FontWeight="SemiBold"/>
+        <ComboBox x:Name="box" Height="24" Margin="0,4,0,8"/>
+
+        <TextBlock x:Name="error" Foreground="Firebrick" TextWrapping="Wrap" Margin="0,0,0,6"/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Start" Width="90" Height="26" Margin="0,0,8,0" IsDefault="True" Click="start_click"/>
+            <Button Content="Cancel" Width="90" Height="26" IsCancel="True" Click="cancel_click"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

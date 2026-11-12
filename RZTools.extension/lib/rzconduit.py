@@ -20,6 +20,7 @@ import math
 from pyrevit import DB
 from Autodesk.Revit.DB.Electrical import Conduit
 from Autodesk.Revit.DB.Structure import StructuralType
+from Autodesk.Revit.UI.Selection import ISelectionFilter
 
 import rzgeom
 from rzcolor import eid_int
@@ -89,6 +90,16 @@ def _category_is(element, bics):
         return False
     cid = eid_int(cat.Id)
     return any(cid == int(b) for b in bics)
+
+
+class ConduitFilter(ISelectionFilter):
+    """Lets the user pick conduits only."""
+
+    def AllowElement(self, element):
+        return is_conduit(element)
+
+    def AllowReference(self, reference, position):
+        return False
 
 
 # --------------------------------------------------------- connectors
@@ -314,7 +325,10 @@ def place_box(doc, symbol, conduit, point):
     """Place a box at point on conduit, aligned with it.
 
     If the box has exactly two conduit connectors, the conduit is cut and
-    both halves are connected to it. Returns (instance, connected)."""
+    both halves are connected to it.
+
+    Returns (instance, connected, new_piece): new_piece is the conduit
+    created by the cut (None when the conduit was not cut)."""
     if not symbol.IsActive:
         symbol.Activate()
         doc.Regenerate()
@@ -334,7 +348,8 @@ def place_box(doc, symbol, conduit, point):
     box_conns = [c for c in connectors(inst)
                  if c.Domain == DB.Domain.DomainCableTrayConduit]
     if len(box_conns) != 2:
-        return inst, False
+        return inst, False, None
+    new = None
     try:
         new = split_conduit(doc, conduit, point)
         start, _mid = ends(conduit)
@@ -345,6 +360,6 @@ def place_box(doc, symbol, conduit, point):
         doc.Regenerate()
         end_connector(conduit, near.Origin).ConnectTo(near)
         end_connector(new, far.Origin).ConnectTo(far)
-        return inst, True
+        return inst, True, new
     except Exception:
-        return inst, False
+        return inst, False, new
