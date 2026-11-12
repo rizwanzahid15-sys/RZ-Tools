@@ -18,7 +18,7 @@ box goes) come from rzgeom; this module only carries them out."""
 import math
 
 from pyrevit import DB
-from Autodesk.Revit.DB.Electrical import Conduit
+from Autodesk.Revit.DB.Electrical import Conduit, ConduitType
 from Autodesk.Revit.DB.Structure import StructuralType
 from Autodesk.Revit.UI.Selection import ISelectionFilter
 
@@ -418,3 +418,98 @@ def place_box(doc, symbol, conduit, point):
     end_connector(conduit, near.Origin).ConnectTo(near)
     end_connector(new, far.Origin).ConnectTo(far)
     return inst, new, None
+
+
+# --------------------------------------------------- batch 2 / 3 helpers
+
+def _nearest_pair(c1, c2):
+    best = None
+    for a in connectors(c1):
+        for b in connectors(c2):
+            d = a.Origin.DistanceTo(b.Origin)
+            if best is None or d < best[0]:
+                best = (d, a, b)
+    return best
+
+
+def connect_union(doc, c1, c2):
+    """Join two in-line conduits with a union/coupling; None on failure."""
+    best = _nearest_pair(c1, c2)
+    if best is None:
+        return None
+    try:
+        return doc.Create.NewUnionFitting(best[1], best[2])
+    except Exception:
+        return None
+
+
+def set_middle_elevation(conduit, offset_ft):
+    """Middle elevation of the conduit above its reference level."""
+    conduit.get_Parameter(DB.BuiltInParameter.RBS_OFFSET_PARAM).Set(offset_ft)
+
+
+def free_conduit_connector(element, near_point):
+    """Unconnected conduit connector of element nearest near_point."""
+    free = [c for c in conduit_connectors(element) if not c.IsConnected]
+    if not free:
+        return None
+    return min(free, key=lambda c: c.Origin.DistanceTo(near_point))
+
+
+def conduit_types(doc):
+    """[(name, ConduitType)] sorted by name."""
+    types = DB.FilteredElementCollector(doc).OfClass(ConduitType)
+    return sorted([(element_name(t), t) for t in types], key=lambda x: x[0])
+
+
+def new_conduit(doc, type_id, level_id, p0, p1, diameter_ft):
+    conduit = Conduit.Create(doc, type_id, p0, p1, level_id)
+    param = conduit.get_Parameter(DB.BuiltInParameter.RBS_CONDUIT_DIAMETER_PARAM)
+    if param is not None and not param.IsReadOnly:
+        param.Set(diameter_ft)
+    return conduit
+
+
+def _connector_by_id(element, conn_id):
+    for conn in conduit_connectors(element):
+        if conn.Id == conn_id:
+            return conn
+    return None
+
+
+def place_box_at_end(doc, symbol, conduit, end_point):
+    """Place a box on the end of a conduit and connect it.
+
+    The box's free conduit connector is turned to face the conduit and
+    moved onto the conduit end. Returns (instance, connected)."""
+    if not symbol.IsActive:
+        symbol.Activate()
+        doc.Regenerate()
+    inst = doc.Create.NewFamilyInstance(end_point, symbol, conduit.ReferenceLevel,
+                                        StructuralType.NonStructural)
+    _set_offset_to(doc, inst, end_point.Z)
+
+    start, finish = ends(conduit)
+    body = start if end_point.DistanceTo(finish) < end_point.DistanceTo(start) else finish
+    toward_body = (body - end_point).Normalize()
+    free = [c for c in conduit_connectors(inst) if not c.IsConnected]
+    if not free:
+        _rotate_about(doc, inst, end_point,
+                      math.atan2(toward_body.Y, toward_body.X))
+        return inst, False
+
+    conn_id = free[0].Id
+    facing = free[0].CoordinateSystem.BasisZ
+    turn = (math.atan2(toward_body.Y, toward_body.X)
+            - math.atan2(facing.Y, facing.X))
+    _rotate_about(doc, inst, end_point, turn)
+    conn = _connector_by_id(inst, conn_id)
+    shift = end_point - conn.Origin
+    if shift.GetLength() > TOL:
+        DB.ElementTransformUtils.MoveElement(doc, inst.Id, shift)
+        doc.Regenerate()
+    conn = _connector_by_id(inst, conn_id)
+    if conn.CoordinateSystem.BasisZ.DotProduct(toward_body) < 0.999:
+        return inst, False
+    end_connector(conduit, end_point).ConnectTo(conn)
+    return inst, True
