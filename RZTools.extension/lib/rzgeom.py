@@ -212,3 +212,58 @@ def plan_pull_boxes(run, max_dist, max_bends, after_bend, start_bends=0):
             pos, dist, bends = at, 0.0, 0
         dist += length - pos
     return boxes
+
+
+# ------------------------------------------------------ crossing offsets
+
+def required_rise(mover_z, mover_r, others, clearance, up):
+    """Vertical move that puts the mover clearance clear of every other.
+
+    others: [(centre_z, outer_radius)]. Positive = up, negative = down.
+    0.0 when the mover is already clear in the chosen direction.
+    """
+    if up:
+        top = max(z + r for z, r in others)
+        rise = top + clearance + mover_r - mover_z
+        return rise if rise > 0 else 0.0
+    bottom = min(z - r for z, r in others)
+    rise = bottom - clearance - mover_r - mover_z
+    return rise if rise < 0 else 0.0
+
+
+def slope_run(rise, angle_deg):
+    """Horizontal length of one slope that climbs |rise| at angle_deg."""
+    return abs(rise) / math.tan(math.radians(angle_deg))
+
+
+def offset_spans(length, crossings, run, end_clear):
+    """Spans along the mover that must be offset, merged where they overlap.
+
+    crossings: [(distance_along_mover, half_width_along_mover)].
+    Each span (s0, e0) covers slope + flat part + slope. Raises
+    ValueError when a span would come closer than end_clear to either end.
+    """
+    raw = sorted((c - hw - run, c + hw + run) for c, hw in crossings)
+    merged = []
+    for s0, e0 in raw:
+        if merged and s0 <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], e0))
+        else:
+            merged.append((s0, e0))
+    for s0, e0 in merged:
+        if s0 < end_clear or e0 > length - end_clear:
+            raise ValueError("too close to end")
+    return merged
+
+
+def dogleg_polyline(p0, p1, spans, rise, run):
+    """Centreline points of the offset conduit: p0, A, B, C, D, ..., p1."""
+    pts = [p0]
+    up = (0.0, 0.0, rise)
+    for s0, e0 in spans:
+        pts.append(point_along(p0, p1, s0))
+        pts.append(vadd(point_along(p0, p1, s0 + run), up))
+        pts.append(vadd(point_along(p0, p1, e0 - run), up))
+        pts.append(point_along(p0, p1, e0))
+    pts.append(p1)
+    return pts
