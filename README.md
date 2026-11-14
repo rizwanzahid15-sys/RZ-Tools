@@ -1,4 +1,4 @@
-# RZ Tools — pyRevit Extension
+# Falcon — pyRevit Extension
 
 A pyRevit extension for electrical BIM work: quick visual markup, coloring,
 and conduit automation (pull boxes, crossing offsets).
@@ -9,7 +9,7 @@ and conduit automation (pull boxes, crossing offsets).
 
 ## Ribbon layout
 
-The **RZ Tools** tab uses compact small buttons, stacked three high:
+The **Falcon** tab uses compact small buttons, stacked three high:
 
 | Panel | Column 1 | Column 2 | Column 3 |
 |---|---|---|---|
@@ -61,7 +61,7 @@ Click it and choose:
 - **Color Family** — a list of families and their types (search box, and
   "Only families that are used in the project"). Tick a family or some types,
   press **Choose color…** and pick a color in Revit's color dialog. The color
-  is added as a view filter (named `RZ_COLOR_…`) to every plan, section and
+  is added as a view filter (named `FALCON_COLOR_…`) to every plan, section and
   elevation — on the view template where a view has one, so the color stays
   when templates are re-applied. 3D views are left alone unless you tick
   **Also apply in 3D views**. **Remove color from selected** and **Remove all
@@ -135,7 +135,7 @@ conduits get one dimension string. **Shift+click** to set how far from the
 conduit midpoint the dimension sits (default 500 mm).
 
 ### Line Cutter (plan views)
-Where one conduit passes over another, a small white "RZ Mask" region hides
+Where one conduit passes over another, a small white "Falcon Mask" region hides
 the lower one so the crossing reads clearly. Only the view changes. Running it
 again replaces the masks it made before in that view. **Shift+click** to set
 the gap each side of the upper conduit (default 50 mm).
@@ -144,18 +144,18 @@ the gap each side of the upper conduit (default 50 mm).
 
 1. In Revit, open **pyRevit tab → Settings**.
 2. Under **Custom Extension Directories**, add the folder that *contains*
-   `RZTools.extension` (not the extension folder itself).
+   `Falcon.extension` (not the extension folder itself).
 3. **Save Settings**, then fully close and reopen Revit (a plain
    **Reload** is not enough after adding a new extension directory for the
    first time).
-4. The **RZ Tools** tab should appear with the **Electrical** and **Graphics**
+4. The **Falcon** tab should appear with the **Electrical** and **Graphics**
    panels.
 
 ## Structure
 
 ```
-RZTools.extension/
-  RZTools.tab/
+Falcon.extension/
+  Falcon.tab/
     Electrical.panel/
       A.stack/                      (column 1 - stack folders keep paths short)
         A_ConnectConduit.pushbutton/

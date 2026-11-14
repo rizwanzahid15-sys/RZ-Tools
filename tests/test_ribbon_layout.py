@@ -1,9 +1,9 @@
-"""The RZ Tools ribbon must follow pyRevit's bundle rules and the agreed
+"""The Falcon ribbon must follow pyRevit's bundle rules and the agreed
 compact layout (small stacked buttons, Markup as a pulldown)."""
 import os
 
 TAB = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir,
-                                   "RZTools.extension", "RZTools.tab"))
+                                   "Falcon.extension", "Falcon.tab"))
 REPO = os.path.dirname(os.path.dirname(TAB))
 MAX_PATH = 260
 
@@ -73,7 +73,7 @@ def test_paths_fit_windows_limit_in_main_folder():
     # extension lives ~45 characters higher than this worktree, so check
     # the paths relative to the repo plus a generous 120-character root.
     longest = 0
-    for root, _dirs, files in os.walk(os.path.join(REPO, "RZTools.extension")):
+    for root, _dirs, files in os.walk(os.path.join(REPO, "Falcon.extension")):
         for name in files:
             rel = os.path.relpath(os.path.join(root, name), REPO)
             longest = max(longest, len(rel))

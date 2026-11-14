@@ -1,0 +1,6 @@
+title: Auto Dimension
+tooltip: >-
+  Dimension conduits in a plan to the nearest parallel grid (or wall) - one
+  dimension string per bundle. Uses selected conduits, or all in the view.
+  Shift+click to set where along the run the dimension sits. Falcon.
+author: Rizwan Zahid

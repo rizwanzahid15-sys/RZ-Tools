@@ -1,6 +1,0 @@
-title: Convert Line
-tooltip: >-
-  Turn straight model/detail lines or CAD lines into conduits on this
-  view's level, with elbows and couplings where lines touch. Arcs are
-  skipped. RZ Tools.
-author: Rizwan Zahid

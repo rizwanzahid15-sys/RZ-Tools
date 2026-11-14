@@ -2,21 +2,21 @@ from rznaming import filter_name, parse_filter_name, PREFIX
 
 
 def test_prefix():
-    assert PREFIX == "RZ_COLOR_"
+    assert PREFIX == "FALCON_COLOR_"
 
 
 def test_plain():
-    assert filter_name("PVC Box") == "RZ_COLOR_PVC Box"
+    assert filter_name("PVC Box") == "FALCON_COLOR_PVC Box"
 
 
 def test_type():
-    assert filter_name("Fixture", "600x1200 - 120") == "RZ_COLOR_Fixture__600x1200 - 120"
+    assert filter_name("Fixture", "600x1200 - 120") == "FALCON_COLOR_Fixture__600x1200 - 120"
 
 
 def test_forbidden():
     # Review Focus 5: forbidden characters replaced, plus a short hash
     name = filter_name("Box: 2-way [20mm]", "T{1}")
-    assert name.startswith("RZ_COLOR_Box_ 2-way _20mm___T_1__")
+    assert name.startswith("FALCON_COLOR_Box_ 2-way _20mm___T_1__")
     for ch in "\\:{}[]|;<>?`~":
         assert ch not in name
 
@@ -34,6 +34,6 @@ def test_family_and_type_names_stay_distinct():
 
 
 def test_parse():
-    assert parse_filter_name("RZ_COLOR_A__B") == ("A", "B")
-    assert parse_filter_name("RZ_COLOR_A") == ("A", None)
+    assert parse_filter_name("FALCON_COLOR_A__B") == ("A", "B")
+    assert parse_filter_name("FALCON_COLOR_A") == ("A", None)
     assert parse_filter_name("Other") is None
