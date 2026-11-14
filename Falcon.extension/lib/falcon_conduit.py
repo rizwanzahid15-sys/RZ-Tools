@@ -1,7 +1,7 @@
 # ============================================================
 # Shared Library
 # ============================================================
-# Module Name    : rzconduit
+# Module Name    : falcon_conduit
 # Purpose        : Revit conduit helpers for the Falcon electrical
 #                  tools - trace runs, split conduits, add elbows,
 #                  place junction/pull boxes.
@@ -13,7 +13,7 @@
 # Python Version : IronPython 2.7
 # ============================================================
 """Revit-side conduit operations. The decisions (where to cut, where a
-box goes) come from rzgeom; this module only carries them out."""
+box goes) come from falcon_geom; this module only carries them out."""
 
 import math
 
@@ -22,8 +22,8 @@ from Autodesk.Revit.DB.Electrical import Conduit, ConduitType
 from Autodesk.Revit.DB.Structure import StructuralType
 from Autodesk.Revit.UI.Selection import ISelectionFilter
 
-import rzgeom
-from rzcolor import eid_int
+import falcon_geom
+from falcon_color import eid_int
 
 BOX_WORDS = ("box", "junction")
 BOX_CATEGORIES = (
@@ -253,7 +253,7 @@ def classify_fitting(fi):
     if len(conns) == 2:
         out_a = tup(conns[0].CoordinateSystem.BasisZ)
         out_b = tup(conns[1].CoordinateSystem.BasisZ)
-        if rzgeom.is_bend(rzgeom.bend_angle_deg(out_a, out_b)):
+        if falcon_geom.is_bend(falcon_geom.bend_angle_deg(out_a, out_b)):
             return "bend"
     return "fitting"
 
@@ -266,7 +266,7 @@ def trace_run(doc, conduit, start_point):
     Stops at a free end, a branch (added as kind "branch"), or a loop.
     """
     p0, p1 = ends(conduit)
-    entry_pt = (p0, p1)[rzgeom.nearest_end(tup(p0), tup(p1), tup(start_point))]
+    entry_pt = (p0, p1)[falcon_geom.nearest_end(tup(p0), tup(p1), tup(start_point))]
     entry = end_connector(conduit, entry_pt)
     element = conduit
     items = []
@@ -282,7 +282,7 @@ def trace_run(doc, conduit, start_point):
                 ps, pe = b, a
             items.append({
                 "kind": "straight", "length": ps.DistanceTo(pe),
-                "vertical": rzgeom.is_vertical(tup(pe - ps)),
+                "vertical": falcon_geom.is_vertical(tup(pe - ps)),
                 "element": element, "p_start": ps, "p_end": pe,
             })
             exit_conn = end_connector(element, pe)

@@ -1,4 +1,4 @@
-from rznaming import filter_name, parse_filter_name, PREFIX
+from falcon_naming import filter_name, parse_filter_name, PREFIX
 
 
 def test_prefix():

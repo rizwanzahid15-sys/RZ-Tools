@@ -24,7 +24,7 @@
 #
 # Dependencies   :
 #   - pyRevit, Revit API
-#   - Falcon.extension/lib/rzgeom.py, rzconduit.py, rzsettings.py
+#   - Falcon.extension/lib/falcon_geom.py, falcon_conduit.py, falcon_settings.py
 #
 # Features       :
 #   - Click within 300 mm of a conduit end -> box goes on the end
@@ -45,12 +45,12 @@ from pyrevit import revit, forms, script
 from Autodesk.Revit.UI.Selection import ObjectType
 from Autodesk.Revit.Exceptions import OperationCanceledException
 
-import rzgeom
-import rzconduit
-import rzsettings
+import falcon_geom
+import falcon_conduit
+import falcon_settings
 
 TITLE = "Falcon - Junction Box"
-SECTION = "rztools_junctionbox"
+SECTION = "falcon_junctionbox"
 END_SNAP_MM = 300.0
 END_MARGIN_MM = 150.0
 
@@ -59,12 +59,12 @@ uidoc = revit.uidoc
 
 
 def choose_symbol():
-    symbols = rzconduit.box_symbols(doc)
+    symbols = falcon_conduit.box_symbols(doc)
     if not symbols:
         forms.alert("Load a junction box family first.", title=TITLE)
         return None
     labels = [label for label, _sym in symbols]
-    last = rzsettings.load(SECTION, {"box_label": ""})["box_label"]
+    last = falcon_settings.load(SECTION, {"box_label": ""})["box_label"]
     if last in labels:
         labels.remove(last)
         labels.insert(0, last)
@@ -72,28 +72,28 @@ def choose_symbol():
                                        multiselect=False, button_name="Use this box")
     if not picked:
         return None
-    rzsettings.save(SECTION, {"box_label": picked})
+    falcon_settings.save(SECTION, {"box_label": picked})
     return dict(symbols)[picked]
 
 
 def place_one(symbol, conduit, pick_point):
     """Place one box for one click. Returns a short result word."""
-    start, finish = rzconduit.ends(conduit)
-    p0, p1 = rzconduit.tup(start), rzconduit.tup(finish)
-    length = rzgeom.vlen(rzgeom.vsub(p1, p0))
-    dist = rzgeom.project_distance(p0, p1, rzconduit.tup(pick_point))
-    end = rzgeom.snap_end(length, dist, rzgeom.mm_to_ft(END_SNAP_MM))
-    if end is not None and rzconduit.end_connector(
+    start, finish = falcon_conduit.ends(conduit)
+    p0, p1 = falcon_conduit.tup(start), falcon_conduit.tup(finish)
+    length = falcon_geom.vlen(falcon_geom.vsub(p1, p0))
+    dist = falcon_geom.project_distance(p0, p1, falcon_conduit.tup(pick_point))
+    end = falcon_geom.snap_end(length, dist, falcon_geom.mm_to_ft(END_SNAP_MM))
+    if end is not None and falcon_conduit.end_connector(
             conduit, (start, finish)[end]).IsConnected:
         end = None   # that end already has a fitting - place the box inline
     if end is not None:
-        _inst, connected = rzconduit.place_box_at_end(
+        _inst, connected = falcon_conduit.place_box_at_end(
             doc, symbol, conduit, (start, finish)[end])
         return "connected" if connected else "placed"
-    margin = rzgeom.mm_to_ft(END_MARGIN_MM)
+    margin = falcon_geom.mm_to_ft(END_MARGIN_MM)
     dist = min(max(dist, margin), length - margin)
-    point = rzconduit.xyz(rzgeom.point_along(p0, p1, dist))
-    _inst, new_piece, _note = rzconduit.place_box(doc, symbol, conduit, point)
+    point = falcon_conduit.xyz(falcon_geom.point_along(p0, p1, dist))
+    _inst, new_piece, _note = falcon_conduit.place_box(doc, symbol, conduit, point)
     return "connected" if new_piece is not None else "placed"
 
 
@@ -111,14 +111,14 @@ def main():
         while True:
             try:
                 ref = uidoc.Selection.PickObject(
-                    ObjectType.Element, rzconduit.ConduitFilter(),
+                    ObjectType.Element, falcon_conduit.ConduitFilter(),
                     "Click a conduit where the junction box goes (Esc to finish)")
             except OperationCanceledException:
                 break
             conduit = doc.GetElement(ref.ElementId)
             with revit.Transaction("Falcon: Junction Box"):
                 try:
-                    result = rzconduit.all_or_nothing(
+                    result = falcon_conduit.all_or_nothing(
                         doc, lambda: place_one(symbol, conduit, ref.GlobalPoint))
                     counts[result] += 1
                 except Exception as ex:

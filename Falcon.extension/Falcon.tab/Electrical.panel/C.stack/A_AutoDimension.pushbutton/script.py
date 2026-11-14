@@ -25,7 +25,7 @@
 #
 # Dependencies   :
 #   - pyRevit, Revit API
-#   - Falcon.extension/lib/rzgeom.py, rzconduit.py, rzview.py, rzsettings.py
+#   - Falcon.extension/lib/falcon_geom.py, falcon_conduit.py, falcon_view.py, falcon_settings.py
 #
 # Features       :
 #   - Grids first, wall faces if no parallel grid within 10 m
@@ -47,13 +47,13 @@ import traceback
 from pyrevit import revit, DB, forms, script
 from Autodesk.Revit.DB.Electrical import Conduit
 
-import rzgeom
-import rzconduit
-import rzview
-import rzsettings
+import falcon_geom
+import falcon_conduit
+import falcon_view
+import falcon_settings
 
 TITLE = "Falcon - Auto Dimension"
-SECTION = "rztools_autodim"
+SECTION = "falcon_autodim"
 SEARCH_M = 10.0
 BUNDLE_GAP_MM = 1000.0
 EXTRA_MM = 300.0
@@ -61,7 +61,7 @@ PARALLEL = math.cos(math.radians(1.0))
 
 doc = revit.doc
 uidoc = revit.uidoc
-tup = rzconduit.tup
+tup = falcon_conduit.tup
 
 
 def _plan_unit(v):
@@ -75,15 +75,15 @@ def _dot2(a, b):
 
 def conduits_in_scope(view):
     picked = [doc.GetElement(i) for i in uidoc.Selection.GetElementIds()]
-    picked = [e for e in picked if rzconduit.is_conduit(e)]
+    picked = [e for e in picked if falcon_conduit.is_conduit(e)]
     if not picked:
         picked = list(DB.FilteredElementCollector(doc, view.Id).OfClass(Conduit))
     keep = []
     for c in picked:
         if not isinstance(c.Location.Curve, DB.Line):
             continue
-        p0, p1 = [tup(p) for p in rzconduit.ends(c)]
-        if rzgeom.is_vertical(rzgeom.vsub(p1, p0)):
+        p0, p1 = [tup(p) for p in falcon_conduit.ends(c)]
+        if falcon_geom.is_vertical(falcon_geom.vsub(p1, p0)):
             continue
         keep.append(c)
     return keep
@@ -114,7 +114,7 @@ def wall_face_candidates(view):
                     if isinstance(face, DB.PlanarFace):
                         origin = tup(face.Origin)
                         along = tup(loc.Direction)
-                        out.append((ref, origin, rzgeom.vadd(origin, along)))
+                        out.append((ref, origin, falcon_geom.vadd(origin, along)))
             except Exception:
                 continue
     return out
@@ -124,10 +124,10 @@ def nearest_parallel(candidates, mid, u, n, limit):
     """(reference, signed position across) of the closest parallel item."""
     best = None
     for ref, a, b in candidates:
-        d = _plan_unit(rzgeom.vsub(b, a))
+        d = _plan_unit(falcon_geom.vsub(b, a))
         if abs(_dot2(d, u)) < PARALLEL:
             continue
-        across = _dot2(rzgeom.vsub(a, mid), n)
+        across = _dot2(falcon_geom.vsub(a, mid), n)
         if abs(across) <= limit and (best is None or abs(across) < abs(best[1])):
             best = (ref, across)
     return best
@@ -136,12 +136,12 @@ def nearest_parallel(candidates, mid, u, n, limit):
 def dimension_bundle(view, members, along_offset, grids, walls):
     """Dimension one bundle to the nearest grid; if Revit refuses that
     grid, try the nearest wall face instead."""
-    lines = [tuple(tup(p) for p in rzconduit.ends(c)) for c in members]
+    lines = [tuple(tup(p) for p in falcon_conduit.ends(c)) for c in members]
     first = lines[0]
-    u = _plan_unit(rzgeom.vsub(first[1], first[0]))
+    u = _plan_unit(falcon_geom.vsub(first[1], first[0]))
     n = (-u[1], u[0])
-    mid = rzgeom.vscale(rzgeom.vadd(first[0], first[1]), 0.5)
-    limit = rzgeom.m_to_ft(SEARCH_M)
+    mid = falcon_geom.vscale(falcon_geom.vadd(first[0], first[1]), 0.5)
+    limit = falcon_geom.m_to_ft(SEARCH_M)
     targets = [t for t in (nearest_parallel(grids, mid, u, n, limit),
                            nearest_parallel(walls, mid, u, n, limit)) if t is not None]
     if not targets:
@@ -149,7 +149,7 @@ def dimension_bundle(view, members, along_offset, grids, walls):
     problem = None
     for ref, ref_across in targets:
         try:
-            return rzconduit.all_or_nothing(doc, lambda: _make_dimension(
+            return falcon_conduit.all_or_nothing(doc, lambda: _make_dimension(
                 view, members, lines, mid, u, n, ref, ref_across, along_offset))
         except Exception as ex:
             problem = ex
@@ -161,12 +161,12 @@ def _make_dimension(view, members, lines, mid, u, n, ref, ref_across, along_offs
     refs = DB.ReferenceArray()
     refs.Append(ref)
     for c, line in zip(members, lines):
-        m = rzgeom.vscale(rzgeom.vadd(line[0], line[1]), 0.5)
-        positions.append(_dot2(rzgeom.vsub(m, mid), n))
+        m = falcon_geom.vscale(falcon_geom.vadd(line[0], line[1]), 0.5)
+        positions.append(_dot2(falcon_geom.vsub(m, mid), n))
         refs.Append(DB.Reference(c))
 
-    extra = rzgeom.mm_to_ft(EXTRA_MM)
-    z = rzview.plan_z(view)
+    extra = falcon_geom.mm_to_ft(EXTRA_MM)
+    z = falcon_view.plan_z(view)
     base = (mid[0] + u[0] * along_offset, mid[1] + u[1] * along_offset)
     lo, hi = min(positions) - extra, max(positions) + extra
     p_lo = DB.XYZ(base[0] + n[0] * lo, base[1] + n[1] * lo, z)
@@ -182,16 +182,16 @@ def main():
         forms.alert("Please open a Revit project first.", title=TITLE)
         return
     view = doc.ActiveView
-    if not rzview.is_plan(view):
+    if not falcon_view.is_plan(view):
         forms.alert("Open a plan view first.", title=TITLE)
         return
     conduits = conduits_in_scope(view)
     if not conduits:
         forms.alert("No straight horizontal conduits to dimension.", title=TITLE)
         return
-    along = rzgeom.mm_to_ft(rzsettings.load(SECTION, {"offset_mm": 500.0})["offset_mm"])
-    lines = [tuple(tup(p) for p in rzconduit.ends(c)) for c in conduits]
-    groups = rzgeom.bundles(lines, rzgeom.mm_to_ft(BUNDLE_GAP_MM))
+    along = falcon_geom.mm_to_ft(falcon_settings.load(SECTION, {"offset_mm": 500.0})["offset_mm"])
+    lines = [tuple(tup(p) for p in falcon_conduit.ends(c)) for c in conduits]
+    groups = falcon_geom.bundles(lines, falcon_geom.mm_to_ft(BUNDLE_GAP_MM))
     grids = grid_candidates(view)
     walls = wall_face_candidates(view)
 
@@ -201,7 +201,7 @@ def main():
             for group in groups:
                 members = [conduits[i] for i in group]
                 try:
-                    rzconduit.all_or_nothing(
+                    falcon_conduit.all_or_nothing(
                         doc, lambda: dimension_bundle(view, members, along, grids, walls))
                     made += 1
                 except Exception as ex:

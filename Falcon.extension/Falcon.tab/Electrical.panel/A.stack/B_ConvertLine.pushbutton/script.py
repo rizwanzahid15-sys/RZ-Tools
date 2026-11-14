@@ -25,7 +25,7 @@
 #
 # Dependencies   :
 #   - pyRevit, Revit API
-#   - Falcon.extension/lib/rzgeom.py, rzconduit.py, rzsettings.py
+#   - Falcon.extension/lib/falcon_geom.py, falcon_conduit.py, falcon_settings.py
 #
 # Features       :
 #   - Arcs and other curves are skipped and counted
@@ -48,12 +48,12 @@ from pyrevit import revit, DB, forms, script
 from Autodesk.Revit.UI.Selection import ObjectType, ISelectionFilter
 from Autodesk.Revit.Exceptions import OperationCanceledException
 
-import rzgeom
-import rzconduit
-import rzsettings
+import falcon_geom
+import falcon_conduit
+import falcon_settings
 
 TITLE = "Falcon - Convert Line"
-SECTION = "rztools_convertline"
+SECTION = "falcon_convertline"
 DEFAULTS = {"type_name": "", "diameter_mm": 20.0, "elevation_mm": 3000.0,
             "fittings": True}
 JOINT_TOL_MM = 5.0
@@ -155,9 +155,9 @@ def cad_lines():
             continue
         # The geometry may come back in the CAD file's own coordinates;
         # if it does not pass near the picked point, move it into the model.
-        hit = rzconduit.tup(ref.GlobalPoint)
+        hit = falcon_conduit.tup(ref.GlobalPoint)
         near = min(_plan_gap(p, hit) for p in pieces)
-        if near > rzgeom.mm_to_ft(50):
+        if near > falcon_geom.mm_to_ft(50):
             tf = imp.GetTotalTransform()
             pieces = [(tf.OfPoint(a), tf.OfPoint(b)) for a, b in pieces]
         segments.extend(pieces)
@@ -165,12 +165,12 @@ def cad_lines():
 
 
 def _plan_gap(piece, point):
-    a, b = rzconduit.tup(piece[0]), rzconduit.tup(piece[1])
+    a, b = falcon_conduit.tup(piece[0]), falcon_conduit.tup(piece[1])
     flat_a, flat_b = (a[0], a[1], 0.0), (b[0], b[1], 0.0)
     flat_p = (point[0], point[1], 0.0)
-    d = rzgeom.project_distance(flat_a, flat_b, flat_p)
-    on = rzgeom.point_along(flat_a, flat_b, d)
-    return rzgeom.vlen(rzgeom.vsub(on, flat_p))
+    d = falcon_geom.project_distance(flat_a, flat_b, flat_p)
+    on = falcon_geom.point_along(flat_a, flat_b, d)
+    return falcon_geom.vlen(falcon_geom.vsub(on, flat_p))
 
 
 def main():
@@ -181,7 +181,7 @@ def main():
     if level is None:
         forms.alert("Open a plan view first - the conduits go on its level.", title=TITLE)
         return
-    types = rzconduit.conduit_types(doc)
+    types = falcon_conduit.conduit_types(doc)
     if not types:
         forms.alert("This project has no conduit types.", title=TITLE)
         return
@@ -194,34 +194,34 @@ def main():
         segments, skipped_curves = revit_lines() if source == "Revit lines" else cad_lines()
     except OperationCanceledException:
         return
-    min_len = rzgeom.mm_to_ft(MIN_LENGTH_MM)
+    min_len = falcon_geom.mm_to_ft(MIN_LENGTH_MM)
     flat = []
     for a, b in segments:
         p0 = (a.X, a.Y, 0.0)
         p1 = (b.X, b.Y, 0.0)
-        if rzgeom.vlen(rzgeom.vsub(p1, p0)) >= min_len:
+        if falcon_geom.vlen(falcon_geom.vsub(p1, p0)) >= min_len:
             flat.append((p0, p1))
         else:
             skipped_curves += 1
     # The same CAD polyline comes back once per picked segment - drop repeats.
-    flat = rzgeom.dedupe_segments(flat, rzgeom.mm_to_ft(1.0))
+    flat = falcon_geom.dedupe_segments(flat, falcon_geom.mm_to_ft(1.0))
     if not flat:
         forms.alert("No straight lines to convert.", title=TITLE)
         return
 
-    dialog = ConvertDialog(rzsettings.load(SECTION, DEFAULTS), types)
+    dialog = ConvertDialog(falcon_settings.load(SECTION, DEFAULTS), types)
     dialog.show_dialog()
     opts = dialog.result
     if opts is None:
         return
-    rzsettings.save(SECTION, dict((k, opts[k]) for k in DEFAULTS))
+    falcon_settings.save(SECTION, dict((k, opts[k]) for k in DEFAULTS))
 
-    diameter = rzgeom.mm_to_ft(opts["diameter_mm"])
-    offset = rzgeom.mm_to_ft(opts["elevation_mm"])
-    joints = rzgeom.joint_pairs(flat, rzgeom.mm_to_ft(JOINT_TOL_MM))
+    diameter = falcon_geom.mm_to_ft(opts["diameter_mm"])
+    offset = falcon_geom.mm_to_ft(opts["elevation_mm"])
+    joints = falcon_geom.joint_pairs(flat, falcon_geom.mm_to_ft(JOINT_TOL_MM))
     if opts["fittings"]:
         # Fittings need the two ends to meet exactly - close small CAD gaps.
-        flat = rzgeom.snap_joints(flat, joints)
+        flat = falcon_geom.snap_joints(flat, joints)
     conduits = []
     failed = []
     fittings = 0
@@ -229,9 +229,9 @@ def main():
         with revit.Transaction("Falcon: Convert Line"):
             for p0, p1 in flat:
                 try:
-                    c = rzconduit.new_conduit(doc, opts["type"].Id, level.Id,
-                                              rzconduit.xyz(p0), rzconduit.xyz(p1), diameter)
-                    rzconduit.set_middle_elevation(c, offset)
+                    c = falcon_conduit.new_conduit(doc, opts["type"].Id, level.Id,
+                                              falcon_conduit.xyz(p0), falcon_conduit.xyz(p1), diameter)
+                    falcon_conduit.set_middle_elevation(c, offset)
                     conduits.append(c)
                 except Exception as ex:
                     conduits.append(None)
@@ -242,12 +242,12 @@ def main():
                     a, b = conduits[i], conduits[j]
                     if a is None or b is None:
                         continue
-                    da = rzgeom.vsub(flat[i][1], flat[i][0])
-                    db = rzgeom.vsub(flat[j][1], flat[j][0])
-                    if rzgeom.joint_kind(da, db) == "union":
-                        made = rzconduit.connect_union(doc, a, b)
+                    da = falcon_geom.vsub(flat[i][1], flat[i][0])
+                    db = falcon_geom.vsub(flat[j][1], flat[j][0])
+                    if falcon_geom.joint_kind(da, db) == "union":
+                        made = falcon_conduit.connect_union(doc, a, b)
                     else:
-                        made = rzconduit.connect_elbow(doc, a, b)
+                        made = falcon_conduit.connect_elbow(doc, a, b)
                     if made is None:
                         failed.append(u"joint between {} and {}: Revit could not add a "
                                       u"fitting".format(a.Id, b.Id))

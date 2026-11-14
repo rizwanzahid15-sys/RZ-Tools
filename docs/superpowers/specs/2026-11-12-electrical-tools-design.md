@@ -1,4 +1,4 @@
-# RZ Tools — Electrical & Graphics Tools — Design Spec
+# Falcon — Electrical & Graphics Tools — Design Spec
 
 Date: 2026-11-12
 Status: Draft — awaiting review
@@ -8,12 +8,12 @@ from their names (marked *agreed from name*).
 
 ## 1. Goal
 
-Add ten conduit-focused tools to the existing **RZ Tools** pyRevit extension so
+Add ten conduit-focused tools to the existing **Falcon** pyRevit extension so
 that electrical BIM modellers stop doing repetitive conduit work by hand:
 pull boxes, crossings, coloring, conversion from CAD, connecting, filleting,
 home runs, dimensions and plan line breaks.
 
-Success = each tool runs from the RZ Tools tab in Revit 2025 on a real
+Success = each tool runs from the Falcon tab in Revit 2025 on a real
 electrical model, does the job in one click-flow, and is fully undoable with a
 single Ctrl+Z.
 
@@ -22,7 +22,7 @@ single Ctrl+Z.
 - pyRevit, **IronPython 2.7**-safe code (same as current Markup tools), target
   Revit 2020–2027, tested primarily on **Revit 2025**.
 - Same file header block as existing scripts (Tool Metadata comment block).
-- Shared logic lives in `RZTools.extension/lib/` modules; pushbutton
+- Shared logic lives in `Falcon.extension/lib/` modules; pushbutton
   `script.py` files stay thin.
 - Never change elements the user did not ask about. View-only changes
   (overrides/filters) are preferred where the tool is graphical.
@@ -36,7 +36,7 @@ single Ctrl+Z.
 ## 3. Ribbon layout
 
 ```
-RZTools.tab/
+Falcon.tab/
   Markup.panel/          (existing — unchanged)
   Electrical.panel/
     A_AutoDimension.pushbutton
@@ -59,11 +59,11 @@ settings also have `config.py` (pyRevit runs it on **Shift+click**).
 
 | Module | Purpose | Revit-free? |
 |---|---|---|
-| `rzgeom.py` | Pure maths: points/vectors as tuples, walk distance along a polyline, offset (dogleg) geometry, angle between directions, segment–segment intersection in plan, grouping by direction | **Yes** — unit-tested with CPython/pytest |
-| `rzconduit.py` | Revit conduit helpers: get/set ends, diameter, type, level; copy a conduit; split a conduit at a point (create second piece + reconnect far end); trace a run through fittings; elbow/fitting angle; connect two conduits with an elbow | No |
-| `rzsettings.py` | Read/write per-tool saved settings via `pyrevit.script.get_config()` with defaults | No |
-| `rztools_markup.py` | Existing — reused by Color Element | No |
-| `rzcolor.py` | Filter create/find/remove, apply to views & templates, element override builder (line + solid surface fill) | No |
+| `falcon_geom.py` | Pure maths: points/vectors as tuples, walk distance along a polyline, offset (dogleg) geometry, angle between directions, segment–segment intersection in plan, grouping by direction | **Yes** — unit-tested with CPython/pytest |
+| `falcon_conduit.py` | Revit conduit helpers: get/set ends, diameter, type, level; copy a conduit; split a conduit at a point (create second piece + reconnect far end); trace a run through fittings; elbow/fitting angle; connect two conduits with an elbow | No |
+| `falcon_settings.py` | Read/write per-tool saved settings via `pyrevit.script.get_config()` with defaults | No |
+| `falcon_markup.py` | Existing — reused by Color Element | No |
+| `falcon_color.py` | Filter create/find/remove, apply to views & templates, element override builder (line + solid surface fill) | No |
 
 Splitting a conduit (no `BreakCurve` API exists for conduits): shorten the
 original to the split point, create a new conduit of the same type/diameter/
@@ -90,15 +90,15 @@ Start window: **Color Family** / **Color Element**.
   already colored.
 - "Also apply in 3D views" (default off).
 - **Choose color…** → `ColorSelectionDialog` → for each ticked family/type:
-  create/update a `ParameterFilterElement` named `RZ_COLOR_<Family>` or
-  `RZ_COLOR_<Family>__<Type>`; category = the family's category; rule = family
+  create/update a `ParameterFilterElement` named `FALCON_COLOR_<Family>` or
+  `FALCON_COLOR_<Family>__<Type>`; category = the family's category; rule = family
   name equals / type name equals (`ALL_MODEL_FAMILY_NAME`,
   `ALL_MODEL_TYPE_NAME`).
 - Filter added (with override) to every graphical view that supports filters.
   If a view has a template, the filter goes on the template instead (each
   template once). 3D views skipped unless ticked.
-- **Remove color from selected** → remove those RZ filters from all views and
-  delete them. **Remove all Coloring colors** → delete all `RZ_COLOR_*` filters.
+- **Remove color from selected** → remove those Falcon filters from all views and
+  delete them. **Remove all Coloring colors** → delete all `FALCON_COLOR_*` filters.
 - Status line: "Colored type X in N view(s). 3D views were left out."
 
 ### 5.2 Pull Box (Electrical) — *seen in video*
@@ -180,16 +180,16 @@ If no route fits these three patterns, say so and change nothing.
 Plan readability: in the active plan view, where conduits cross, hide a short
 piece of the **lower** conduit's lines so the upper one reads on top. Done
 with detail-level masking: place a masking region (white/no-line filled
-region of type "RZ Mask", created if missing) sized
+region of type "Falcon Mask", created if missing) sized
 `upper diameter + 2 × gap` across the lower conduit at each crossing.
 Gap setting [50 mm]. Scope: selection or whole view. Re-running removes
-previous RZ masks in that view first. No model change.
+previous Falcon masks in that view first. No model change.
 
 ### 5.8 Home Run (Electrical) — *agreed from name*
 
 Pick the last device of a circuit (or a conduit end) → tool reads the device's
 electrical system (panel + circuit number) → draws a home-run arrow toward
-the panel (detail line with arrowhead from a detail component "RZ Home Run
+the panel (detail line with arrowhead from a detail component "Falcon Home Run
 Arrow" if loaded, else a detail line + filled triangle) with a saved length
 setting [600 mm, model length] and places a text note
 "<Panel>-<Circuit>" beside it. Direction: from the device toward the panel's
@@ -222,7 +222,7 @@ one chain dimension through all conduits. Uses conduit centreline references.
 
 ## 7. Testing
 
-- `lib/rzgeom.py` is Revit-free and covered by **pytest** tests in `tests/`
+- `lib/falcon_geom.py` is Revit-free and covered by **pytest** tests in `tests/`
   (walk along polyline, dogleg geometry, bend classification, direction
   grouping, plan intersection, merge of close crossings).
 - Each tool gets a manual test checklist in `docs/testing/<tool>.md` for the
@@ -230,7 +230,7 @@ one chain dimension through all conduits. Uses conduit centreline references.
 
 ## 8. Delivery order
 
-1. **Batch 1:** `rzgeom`, `rzconduit`, `rzsettings`, `rzcolor`; Coloring,
+1. **Batch 1:** `falcon_geom`, `falcon_conduit`, `falcon_settings`, `falcon_color`; Coloring,
    Pull Box, Conduit Cutter.
 2. **Batch 2:** Junction Box, Convert Line, Connect Conduit.
 3. **Batch 3:** Multi Fillet, Home Run, Auto Dimension, Line Cutter.

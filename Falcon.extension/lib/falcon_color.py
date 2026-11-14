@@ -1,7 +1,7 @@
 # ============================================================
 # Shared Library
 # ============================================================
-# Module Name    : rzcolor
+# Module Name    : falcon_color
 # Purpose        : Colour overrides and FALCON_COLOR_* view filters for the
 #                  Coloring tool.
 # Author         : Rizwan Zahid
@@ -23,8 +23,8 @@ from System.Collections.Generic import List
 from pyrevit import DB
 from Autodesk.Revit.UI import ColorSelectionDialog, ItemSelectionDialogResult
 
-import rznaming
-import rztools_markup
+import falcon_naming
+import falcon_markup
 
 # View types that can carry filters and are worth colouring.
 PLAN_LIKE_TYPES = (
@@ -136,18 +136,18 @@ def _equals_rule(bip, value):
         return DB.ParameterFilterRuleFactory.CreateEqualsRule(pid, value, True)
 
 
-def rz_filters(doc):
+def falcon_filters(doc):
     """{name: ParameterFilterElement} for every filter this tool created."""
     found = {}
     for filt in DB.FilteredElementCollector(doc).OfClass(DB.ParameterFilterElement):
-        if filt.Name.startswith(rznaming.PREFIX):
+        if filt.Name.startswith(falcon_naming.PREFIX):
             found[filt.Name] = filt
     return found
 
 
 def ensure_filter(doc, family_name, category_id, type_name=None):
     """Find or create the Falcon filter for a family (or one of its types)."""
-    name = rznaming.filter_name(family_name, type_name)
+    name = falcon_naming.filter_name(family_name, type_name)
     rules = List[DB.FilterRule]()
     rules.Add(_equals_rule(DB.BuiltInParameter.ALL_MODEL_FAMILY_NAME, family_name))
     if type_name is not None:
@@ -156,7 +156,7 @@ def ensure_filter(doc, family_name, category_id, type_name=None):
     categories = List[DB.ElementId]()
     categories.Add(category_id)
 
-    existing = rz_filters(doc).get(name)
+    existing = falcon_filters(doc).get(name)
     if existing is not None:
         existing.SetCategories(categories)
         existing.SetElementFilter(element_filter)
@@ -181,7 +181,7 @@ def apply_filter(views, filt, ogs):
 
 def filter_colors(doc):
     """{filter name: DB.Color} read from the first view that uses each."""
-    filters = rz_filters(doc)
+    filters = falcon_filters(doc)
     by_id = dict((eid_int(f.Id), name) for name, f in filters.items())
     colors = {}
     for view in DB.FilteredElementCollector(doc).OfClass(DB.View):
@@ -220,11 +220,11 @@ def color_elements(doc, ids, color):
     """
     ogs = color_override(doc, color)
     active = doc.ActiveView
-    rztools_markup.apply_override(doc, active, ids, ogs)
+    falcon_markup.apply_override(doc, active, ids, ogs)
     views_3d = 0
     for view in DB.FilteredElementCollector(doc).OfClass(DB.View3D):
         if view.IsTemplate or view.Id == active.Id:
             continue
-        rztools_markup.apply_override(doc, view, ids, ogs)
+        falcon_markup.apply_override(doc, view, ids, ogs)
         views_3d += 1
     return (len(ids), views_3d)

@@ -25,7 +25,7 @@
 #
 # Dependencies   :
 #   - pyRevit, Revit API
-#   - Falcon.extension/lib/rzgeom.py, rzconduit.py
+#   - Falcon.extension/lib/falcon_geom.py, falcon_conduit.py
 #
 # Features       :
 #   - In-line conduits -> coupling; crossing directions -> elbow
@@ -48,8 +48,8 @@ from pyrevit import revit, forms, script
 from Autodesk.Revit.UI.Selection import ObjectType
 from Autodesk.Revit.Exceptions import OperationCanceledException
 
-import rzgeom
-import rzconduit
+import falcon_geom
+import falcon_conduit
 
 TITLE = "Falcon - Connect Conduit"
 TOL_MM = 5.0
@@ -57,106 +57,106 @@ APPROACH_MM = 300.0   # straight run into a side connector
 
 doc = revit.doc
 uidoc = revit.uidoc
-tup = rzconduit.tup
-xyz = rzconduit.xyz
+tup = falcon_conduit.tup
+xyz = falcon_conduit.xyz
 
 
 def set_end(conduit, index, point):
-    p0, p1 = rzconduit.ends(conduit)
+    p0, p1 = falcon_conduit.ends(conduit)
     if index == 0:
-        rzconduit.set_ends(conduit, point, p1)
+        falcon_conduit.set_ends(conduit, point, p1)
     else:
-        rzconduit.set_ends(conduit, p0, point)
+        falcon_conduit.set_ends(conduit, p0, point)
 
 
 def end_index(conduit, point):
-    p0, p1 = rzconduit.ends(conduit)
+    p0, p1 = falcon_conduit.ends(conduit)
     return 0 if p0.DistanceTo(point) <= p1.DistanceTo(point) else 1
 
 
 def check_free(conduit, index):
-    point = rzconduit.ends(conduit)[index]
-    if rzconduit.end_connector(conduit, point).IsConnected:
+    point = falcon_conduit.ends(conduit)[index]
+    if falcon_conduit.end_connector(conduit, point).IsConnected:
         raise ValueError("conduit {} is already connected at that end".format(conduit.Id))
 
 
 def connect_conduits(a, ia, b):
-    tol = rzgeom.mm_to_ft(TOL_MM)
-    a0, a1 = [tup(p) for p in rzconduit.ends(a)]
-    b0, b1 = [tup(p) for p in rzconduit.ends(b)]
+    tol = falcon_geom.mm_to_ft(TOL_MM)
+    a0, a1 = [tup(p) for p in falcon_conduit.ends(a)]
+    b0, b1 = [tup(p) for p in falcon_conduit.ends(b)]
     a_end, a_other = (a0, a1) if ia == 0 else (a1, a0)
     ib = end_index(b, xyz(a_end))
     check_free(a, ia)
     check_free(b, ib)
-    da, db = rzgeom.vsub(a1, a0), rzgeom.vsub(b1, b0)
-    if rzgeom.is_vertical(da) or rzgeom.is_vertical(db):
+    da, db = falcon_geom.vsub(a1, a0), falcon_geom.vsub(b1, b0)
+    if falcon_geom.is_vertical(da) or falcon_geom.is_vertical(db):
         raise ValueError("vertical conduits are not supported")
     if abs(a0[2] - a1[2]) > tol or abs(b0[2] - b1[2]) > tol or abs(a_end[2] - b0[2]) > tol:
         raise ValueError("the conduits are not level at the same height")
 
-    if rzgeom.joint_kind(da, db) == "union":
+    if falcon_geom.joint_kind(da, db) == "union":
         b_near = (b0, b1)[ib]
         flat = lambda p: (p[0], p[1], 0.0)
-        d = rzgeom.project_distance(flat(a_other), flat(a_end), flat(b_near))
-        foot = rzgeom.point_along(flat(a_other), flat(a_end), d)
-        if rzgeom.vlen(rzgeom.vsub(foot, flat(b_near))) > tol:
+        d = falcon_geom.project_distance(flat(a_other), flat(a_end), flat(b_near))
+        foot = falcon_geom.point_along(flat(a_other), flat(a_end), d)
+        if falcon_geom.vlen(falcon_geom.vsub(foot, flat(b_near))) > tol:
             raise ValueError("these conduits are parallel but not in line")
         set_end(a, ia, xyz(b_near))
         doc.Regenerate()
-        if rzconduit.connect_union(doc, a, b) is None:
+        if falcon_conduit.connect_union(doc, a, b) is None:
             raise ValueError("Revit could not add a coupling")
         return "coupling"
 
-    corner = rzgeom.line_intersection_xy(a0, a1, b0, b1)
+    corner = falcon_geom.line_intersection_xy(a0, a1, b0, b1)
     corner = (corner[0], corner[1], a_end[2])
     b_near, b_other = ((b0, b1) if ib == 0 else (b1, b0))
-    if (rzgeom.vdot(rzgeom.vsub(corner, a_other), rzgeom.vsub(a_end, a_other)) <= 0
-            or rzgeom.vdot(rzgeom.vsub(corner, b_other), rzgeom.vsub(b_near, b_other)) <= 0):
+    if (falcon_geom.vdot(falcon_geom.vsub(corner, a_other), falcon_geom.vsub(a_end, a_other)) <= 0
+            or falcon_geom.vdot(falcon_geom.vsub(corner, b_other), falcon_geom.vsub(b_near, b_other)) <= 0):
         raise ValueError("the conduits point away from each other")
     set_end(a, ia, xyz(corner))
     set_end(b, ib, xyz(corner))
     doc.Regenerate()
-    if rzconduit.connect_elbow(doc, a, b) is None:
+    if falcon_conduit.connect_elbow(doc, a, b) is None:
         raise ValueError("Revit could not add an elbow (check bend radius / lengths)")
     return "elbow"
 
 
 def _dedupe(points):
-    tol = rzgeom.mm_to_ft(1.0)
+    tol = falcon_geom.mm_to_ft(1.0)
     out = [points[0]]
     for p in points[1:]:
-        if rzgeom.vlen(rzgeom.vsub(p, out[-1])) > tol:
+        if falcon_geom.vlen(falcon_geom.vsub(p, out[-1])) > tol:
             out.append(p)
     return out
 
 
 def connect_device(a, ia, target):
     check_free(a, ia)
-    end = rzconduit.ends(a)[ia]
-    other = rzconduit.ends(a)[1 - ia]
-    conn = rzconduit.free_conduit_connector(target, end)
+    end = falcon_conduit.ends(a)[ia]
+    other = falcon_conduit.ends(a)[1 - ia]
+    conn = falcon_conduit.free_conduit_connector(target, end)
     if conn is None:
         raise ValueError("that element has no free conduit connector")
-    points = _dedupe(rzgeom.route_points(
+    points = _dedupe(falcon_geom.route_points(
         tup(end), tup(conn.Origin), tup(conn.CoordinateSystem.BasisZ),
-        approach=rzgeom.mm_to_ft(APPROACH_MM)))
+        approach=falcon_geom.mm_to_ft(APPROACH_MM)))
     if len(points) < 2:
         raise ValueError("the conduit already ends at the connector")
 
     prev = a
-    out_dir = rzgeom.vsub(tup(end), tup(other))
-    first_leg = rzgeom.vsub(points[1], points[0])
-    if rzgeom.angle_between_deg(out_dir, first_leg) < 1.0:
+    out_dir = falcon_geom.vsub(tup(end), tup(other))
+    first_leg = falcon_geom.vsub(points[1], points[0])
+    if falcon_geom.angle_between_deg(out_dir, first_leg) < 1.0:
         set_end(a, ia, xyz(points[1]))      # just extend the conduit
         points = points[1:]
     for p, q in zip(points, points[1:]):
-        leg = rzconduit.new_conduit_like(doc, a, xyz(p), xyz(q))
+        leg = falcon_conduit.new_conduit_like(doc, a, xyz(p), xyz(q))
         doc.Regenerate()
-        if rzconduit.connect_elbow(doc, prev, leg) is None:
+        if falcon_conduit.connect_elbow(doc, prev, leg) is None:
             raise ValueError("Revit could not add an elbow on the route")
         prev = leg
     doc.Regenerate()
-    rzconduit.end_connector(prev, conn.Origin).ConnectTo(conn)
+    falcon_conduit.end_connector(prev, conn.Origin).ConnectTo(conn)
     return "route"
 
 
@@ -166,7 +166,7 @@ def main():
         return
     try:
         ref_a = uidoc.Selection.PickObject(
-            ObjectType.Element, rzconduit.ConduitFilter(),
+            ObjectType.Element, falcon_conduit.ConduitFilter(),
             "Click the conduit near the end you want to connect")
         ref_b = uidoc.Selection.PickObject(
             ObjectType.Element, "Click the conduit or device to connect to")
@@ -185,11 +185,11 @@ def main():
             # Refusals are caught inside the transaction (the sub-step is
             # already rolled back) so they never show up as errors.
             try:
-                if rzconduit.is_conduit(target):
-                    result = rzconduit.all_or_nothing(
+                if falcon_conduit.is_conduit(target):
+                    result = falcon_conduit.all_or_nothing(
                         doc, lambda: connect_conduits(a, ia, target))
                 else:
-                    result = rzconduit.all_or_nothing(
+                    result = falcon_conduit.all_or_nothing(
                         doc, lambda: connect_device(a, ia, target))
             except ValueError as reason:
                 refusal = reason

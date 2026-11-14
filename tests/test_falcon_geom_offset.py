@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from rzgeom import required_rise, slope_run, offset_spans, dogleg_polyline
+from falcon_geom import required_rise, slope_run, offset_spans, dogleg_polyline
 
 
 def test_rise_up():

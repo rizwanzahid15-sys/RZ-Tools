@@ -25,7 +25,7 @@
 #
 # Dependencies   :
 #   - pyRevit, Revit API
-#   - Falcon.extension/lib/rzgeom.py, rzview.py, rzsettings.py
+#   - Falcon.extension/lib/falcon_geom.py, falcon_view.py, falcon_settings.py
 #
 # Features       :
 #   - Works on Revit 2020 (ElectricalSystems) and 2021+ (GetElectricalSystems)
@@ -47,13 +47,13 @@ from pyrevit import revit, DB, forms, script
 from Autodesk.Revit.UI.Selection import ObjectType, ISelectionFilter
 from Autodesk.Revit.Exceptions import OperationCanceledException
 
-import rzgeom
-import rzconduit
-import rzview
-import rzsettings
+import falcon_geom
+import falcon_conduit
+import falcon_view
+import falcon_settings
 
 TITLE = "Falcon - Home Run"
-SECTION = "rztools_homerun"
+SECTION = "falcon_homerun"
 DEFAULT_LENGTH_MM = 600.0
 HEAD_MM = 150.0
 TEXT_GAP_MM = 100.0
@@ -88,25 +88,25 @@ def draw(view, device, length):
     if found is None:
         raise ValueError("not on a circuit with a panel")
     panel_name, circuit, panel = found
-    label = rzgeom.home_run_label(panel_name, circuit)
+    label = falcon_geom.home_run_label(panel_name, circuit)
     if label is None:
         raise ValueError("the circuit has no panel name")
     start_pt = getattr(device.Location, "Point", None)
     panel_pt = getattr(panel.Location, "Point", None)
     if start_pt is None or panel_pt is None:
         raise ValueError("device or panel has no insertion point")
-    z = rzview.plan_z(view)
+    z = falcon_view.plan_z(view)
     start = (start_pt.X, start_pt.Y, z)
     toward = (panel_pt.X, panel_pt.Y, z)
-    if rzgeom.vlen(rzgeom.vsub(toward, start)) < 1e-6:
+    if falcon_geom.vlen(falcon_geom.vsub(toward, start)) < 1e-6:
         raise ValueError("device sits on the panel")
-    end, left, right = rzgeom.arrow_points(start, toward, length, rzgeom.mm_to_ft(HEAD_MM))
-    rzview.detail_line(doc, view, rzview.at_z(start, z), rzview.at_z(end, z))
-    rzview.detail_line(doc, view, rzview.at_z(end, z), rzview.at_z(left, z))
-    rzview.detail_line(doc, view, rzview.at_z(end, z), rzview.at_z(right, z))
-    gap = rzgeom.mm_to_ft(TEXT_GAP_MM)
-    text_at = rzgeom.point_along(start, end, length + gap)
-    rzview.text_note(doc, view, rzview.at_z(text_at, z), label)
+    end, left, right = falcon_geom.arrow_points(start, toward, length, falcon_geom.mm_to_ft(HEAD_MM))
+    falcon_view.detail_line(doc, view, falcon_view.at_z(start, z), falcon_view.at_z(end, z))
+    falcon_view.detail_line(doc, view, falcon_view.at_z(end, z), falcon_view.at_z(left, z))
+    falcon_view.detail_line(doc, view, falcon_view.at_z(end, z), falcon_view.at_z(right, z))
+    gap = falcon_geom.mm_to_ft(TEXT_GAP_MM)
+    text_at = falcon_geom.point_along(start, end, length + gap)
+    falcon_view.text_note(doc, view, falcon_view.at_z(text_at, z), label)
     return label
 
 
@@ -115,11 +115,11 @@ def main():
         forms.alert("Please open a Revit project first.", title=TITLE)
         return
     view = doc.ActiveView
-    if not rzview.is_plan(view):
+    if not falcon_view.is_plan(view):
         forms.alert("Open a plan view first.", title=TITLE)
         return
-    length = rzgeom.mm_to_ft(
-        rzsettings.load(SECTION, {"length_mm": DEFAULT_LENGTH_MM})["length_mm"])
+    length = falcon_geom.mm_to_ft(
+        falcon_settings.load(SECTION, {"length_mm": DEFAULT_LENGTH_MM})["length_mm"])
 
     drawn, skipped = [], []
     with revit.TransactionGroup("Falcon: Home Run"):
@@ -135,7 +135,7 @@ def main():
                 # Caught inside the transaction so a skipped device never
                 # shows as an error, and never undoes earlier home runs.
                 try:
-                    drawn.append(rzconduit.all_or_nothing(
+                    drawn.append(falcon_conduit.all_or_nothing(
                         doc, lambda: draw(view, device, length)))
                 except Exception as reason:
                     skipped.append(u"{}: {}".format(device.Id, reason))

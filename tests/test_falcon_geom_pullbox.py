@@ -1,6 +1,6 @@
 import pytest
 
-from rzgeom import plan_pull_boxes
+from falcon_geom import plan_pull_boxes
 
 
 def S(length, vertical=False):

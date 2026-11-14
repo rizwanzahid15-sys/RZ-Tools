@@ -1,7 +1,7 @@
 # ============================================================
 # Shared Library
 # ============================================================
-# Module Name    : rzgeom
+# Module Name    : falcon_geom
 # Purpose        : Revit-free geometry and planning maths for the Falcon
 #                  electrical tools (pull boxes, conduit crossings).
 # Author         : Rizwan Zahid

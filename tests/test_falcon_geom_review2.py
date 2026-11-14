@@ -1,7 +1,7 @@
 """Tests for the second final-review findings (batches 2-3)."""
 import pytest
 
-from rzgeom import dedupe_segments, snap_joints, route_points, upper_edges
+from falcon_geom import dedupe_segments, snap_joints, route_points, upper_edges
 
 
 def rounded(segs):

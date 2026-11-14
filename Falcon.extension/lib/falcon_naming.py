@@ -1,7 +1,7 @@
 # ============================================================
 # Shared Library
 # ============================================================
-# Module Name    : rznaming
+# Module Name    : falcon_naming
 # Purpose        : Revit-free naming rules for the view filters created
 #                  by the Coloring tool.
 # Author         : Rizwan Zahid

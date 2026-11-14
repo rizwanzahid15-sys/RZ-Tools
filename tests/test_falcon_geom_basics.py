@@ -1,6 +1,6 @@
 import pytest
 
-from rzgeom import (
+from falcon_geom import (
     mm_to_ft, ft_to_mm, m_to_ft, vnorm, bend_angle_deg, is_bend,
     is_vertical, point_along, angle_between_deg,
 )

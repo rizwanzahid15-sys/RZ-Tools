@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from rzgeom import group_by_direction, nearest_end, plan_intersection, crossing_sin
+from falcon_geom import group_by_direction, nearest_end, plan_intersection, crossing_sin
 
 
 def test_group_reversed_same():

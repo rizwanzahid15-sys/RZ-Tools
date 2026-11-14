@@ -1,6 +1,6 @@
 import pytest
 
-from rzgeom import (project_distance, snap_end, joint_pairs, joint_kind,
+from falcon_geom import (project_distance, snap_end, joint_pairs, joint_kind,
                     line_intersection_xy, route_points)
 
 

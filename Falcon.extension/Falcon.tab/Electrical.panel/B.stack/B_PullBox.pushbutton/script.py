@@ -26,7 +26,7 @@
 # Dependencies   :
 #   - pyRevit
 #   - Revit API
-#   - Falcon.extension/lib/rzgeom.py, rzconduit.py, rzsettings.py
+#   - Falcon.extension/lib/falcon_geom.py, falcon_conduit.py, falcon_settings.py
 #
 # Features       :
 #   - Follows the run through elbows and fittings
@@ -50,12 +50,12 @@ from pyrevit import revit, forms, script
 from Autodesk.Revit.UI.Selection import ObjectType
 from Autodesk.Revit.Exceptions import OperationCanceledException
 
-import rzgeom
-import rzconduit
-import rzsettings
+import falcon_geom
+import falcon_conduit
+import falcon_settings
 
 TITLE = "Falcon - Pull Box"
-SECTION = "rztools_pullbox"
+SECTION = "falcon_pullbox"
 DEFAULTS = {"distance_m": 15.0, "bends": 2, "riser": False, "box_label": ""}
 AFTER_BEND_MM = 300.0
 END_MARGIN_MM = 150.0   # keep boxes this far from conduit joints
@@ -117,12 +117,12 @@ def place_all(run, boxes, symbol):
     skipped = []
     for seg_index, dist in reversed(boxes):
         seg = run[seg_index]
-        point = rzconduit.xyz(rzgeom.point_along(
-            rzconduit.tup(seg["p_start"]), rzconduit.tup(seg["p_end"]), dist))
+        point = falcon_conduit.xyz(falcon_geom.point_along(
+            falcon_conduit.tup(seg["p_start"]), falcon_conduit.tup(seg["p_end"]), dist))
         candidates = pieces.setdefault(seg_index, [seg["element"]])
         host = None
         for piece in candidates:
-            if rzconduit.conduit_contains(piece, point):
+            if falcon_conduit.conduit_contains(piece, point):
                 host = piece
                 break
         if host is None:
@@ -130,8 +130,8 @@ def place_all(run, boxes, symbol):
                 seg["element"].Id))
             continue
         try:
-            _inst, new_piece, note = rzconduit.all_or_nothing(
-                doc, lambda: rzconduit.place_box(doc, symbol, host, point))
+            _inst, new_piece, note = falcon_conduit.all_or_nothing(
+                doc, lambda: falcon_conduit.place_box(doc, symbol, host, point))
         except Exception as ex:
             skipped.append(u"{}: {}".format(host.Id, ex))
             continue
@@ -148,39 +148,39 @@ def main():
     if doc is None:
         forms.alert("Please open a Revit project first.", title=TITLE)
         return
-    symbols = rzconduit.box_symbols(doc)
+    symbols = falcon_conduit.box_symbols(doc)
     if not symbols:
         forms.alert("Load a junction box family first.", title=TITLE)
         return
 
-    dialog = PullBoxDialog(rzsettings.load(SECTION, DEFAULTS), symbols)
+    dialog = PullBoxDialog(falcon_settings.load(SECTION, DEFAULTS), symbols)
     dialog.show_dialog()
     opts = dialog.result
     if opts is None:
         return
-    rzsettings.save(SECTION, dict((k, opts[k]) for k in DEFAULTS))
+    falcon_settings.save(SECTION, dict((k, opts[k]) for k in DEFAULTS))
 
     try:
         ref = uidoc.Selection.PickObject(
-            ObjectType.Element, rzconduit.ConduitFilter(),
+            ObjectType.Element, falcon_conduit.ConduitFilter(),
             "Click the conduit at the panel end")
     except OperationCanceledException:
         return
     conduit = doc.GetElement(ref.ElementId)
-    run = rzconduit.trace_run(doc, conduit, ref.GlobalPoint)
+    run = falcon_conduit.trace_run(doc, conduit, ref.GlobalPoint)
 
     walked = []
     for item in run:
         if item["kind"] == "branch":
             break
         walked.append(item)
-    length_m = sum(i["length"] for i in walked) * rzgeom.MM_PER_FT / 1000.0
+    length_m = sum(i["length"] for i in walked) * falcon_geom.MM_PER_FT / 1000.0
     bend_count = len([i for i in walked if i["kind"] == "bend"])
 
-    boxes = rzgeom.plan_pull_boxes(
-        run, rzgeom.m_to_ft(opts["distance_m"]), opts["bends"],
-        rzgeom.mm_to_ft(AFTER_BEND_MM), 1 if opts["riser"] else 0,
-        end_margin=rzgeom.mm_to_ft(END_MARGIN_MM))
+    boxes = falcon_geom.plan_pull_boxes(
+        run, falcon_geom.m_to_ft(opts["distance_m"]), opts["bends"],
+        falcon_geom.mm_to_ft(AFTER_BEND_MM), 1 if opts["riser"] else 0,
+        end_margin=falcon_geom.mm_to_ft(END_MARGIN_MM))
 
     lines = []
     if not boxes:

@@ -1,7 +1,7 @@
 # ============================================================
 # Shared Library
 # ============================================================
-# Module Name    : rzview
+# Module Name    : falcon_view
 # Purpose        : View / annotation helpers for Home Run, Auto
 #                  Dimension and Line Cutter (plan views only).
 # Author         : Rizwan Zahid
@@ -15,7 +15,7 @@
 
 from pyrevit import DB, forms
 
-import rzsettings
+import falcon_settings
 
 
 def is_plan(view):
@@ -48,7 +48,7 @@ def text_note(doc, view, point, text):
 
 def ask_setting(title, section, key, default, prompt, low, high):
     """Shift+click helper: ask for one number and save it."""
-    current = rzsettings.load(section, {key: default})[key]
+    current = falcon_settings.load(section, {key: default})[key]
     text = forms.ask_for_string(default=str(current), prompt=prompt, title=title)
     if text is None:
         return None
@@ -59,6 +59,6 @@ def ask_setting(title, section, key, default, prompt, low, high):
     if value is None or not (low <= value <= high):
         forms.alert(u"Enter a number from {:g} to {:g}.".format(low, high), title=title)
         return None
-    rzsettings.save(section, {key: value})
+    falcon_settings.save(section, {key: value})
     forms.alert(u"Saved: {:g}.".format(value), title=title)
     return value

@@ -28,7 +28,7 @@
 # Dependencies   :
 #   - pyRevit
 #   - Revit API
-#   - Falcon.extension/lib/rzcolor.py, rznaming.py, rztools_markup.py
+#   - Falcon.extension/lib/falcon_color.py, falcon_naming.py, falcon_markup.py
 #
 # Features       :
 #   - Search, "only used" filter, swatches showing current colors
@@ -61,8 +61,8 @@ from pyrevit import revit, DB, forms, script
 from Autodesk.Revit.UI.Selection import ObjectType
 from Autodesk.Revit.Exceptions import OperationCanceledException
 
-import rzcolor
-import rznaming
+import falcon_color
+import falcon_naming
 
 TITLE = "Falcon - Coloring"
 SYSTEM_CATEGORIES = (
@@ -93,7 +93,7 @@ class FamilyEntry(object):
         self.types = []          # [(type name, type id int)]
 
     def add_type(self, type_name, type_id):
-        self.types.append((type_name, rzcolor.eid_int(type_id)))
+        self.types.append((type_name, falcon_color.eid_int(type_id)))
 
 
 def used_type_ids():
@@ -104,7 +104,7 @@ def used_type_ids():
         except Exception:
             continue
         if tid is not None and tid != DB.ElementId.InvalidElementId:
-            used.add(rzcolor.eid_int(tid))
+            used.add(falcon_color.eid_int(tid))
     return used
 
 
@@ -117,7 +117,7 @@ def collect_families():
         entry = FamilyEntry(fam.Name, cat)
         for sid in fam.GetFamilySymbolIds():
             entry.add_type(_name(doc.GetElement(sid)), sid)
-        entries[(fam.Name, rzcolor.eid_int(cat.Id))] = entry
+        entries[(fam.Name, falcon_color.eid_int(cat.Id))] = entry
 
     for bic in SYSTEM_CATEGORIES:
         types = DB.FilteredElementCollector(doc).OfCategory(bic).WhereElementIsElementType()
@@ -125,7 +125,7 @@ def collect_families():
             cat = etype.Category
             if cat is None:
                 continue
-            key = (etype.FamilyName, rzcolor.eid_int(cat.Id))
+            key = (etype.FamilyName, falcon_color.eid_int(cat.Id))
             if key not in entries:
                 entries[key] = FamilyEntry(etype.FamilyName, cat)
             entries[key].add_type(_name(etype), etype.Id)
@@ -147,7 +147,7 @@ class ColorFamilyWindow(forms.WPFWindow):
         self.used = used_type_ids()
         self.checked = set()       # keys: (family, type or None)
         self.nodes = []
-        self.colors = rzcolor.filter_colors(doc)
+        self.colors = falcon_color.filter_colors(doc)
         self.build_tree()
 
     # ---------- tree
@@ -190,12 +190,12 @@ class ColorFamilyWindow(forms.WPFWindow):
             item = TreeViewItem()
             item.Header = self._header(
                 (fam.name, None), u"{}   [{}]".format(fam.name, fam.category_name),
-                rznaming.filter_name(fam.name))
+                falcon_naming.filter_name(fam.name))
             for type_name, _tid in sorted(types):
                 child = TreeViewItem()
                 child.Header = self._header(
                     (fam.name, type_name), type_name,
-                    rznaming.filter_name(fam.name, type_name))
+                    falcon_naming.filter_name(fam.name, type_name))
                 item.Items.Add(child)
             item.IsExpanded = bool(needle)
             self.tree.Items.Add(item)
@@ -230,7 +230,7 @@ class ColorFamilyWindow(forms.WPFWindow):
         return result
 
     def refresh(self, message):
-        self.colors = rzcolor.filter_colors(doc)
+        self.colors = falcon_color.filter_colors(doc)
         self.build_tree()
         self.status.Text = message
 
@@ -248,7 +248,7 @@ class ColorFamilyWindow(forms.WPFWindow):
         if not targets:
             self.status.Text = "Tick a family or a type first."
             return
-        color = rzcolor.pick_color()
+        color = falcon_color.pick_color()
         if color is None:
             return
         include_3d = bool(self.also_3d.IsChecked)
@@ -256,12 +256,12 @@ class ColorFamilyWindow(forms.WPFWindow):
         views_done = 0
         with revit.TransactionGroup("Falcon: Color Family"):
             with revit.Transaction("Falcon: Color Family"):
-                views = rzcolor.target_views(doc, include_3d)
-                ogs = rzcolor.color_override(doc, color)
+                views = falcon_color.target_views(doc, include_3d)
+                ogs = falcon_color.color_override(doc, color)
                 for entry, typ in targets:
                     try:
-                        filt = rzcolor.ensure_filter(doc, entry.name, entry.category_id, typ)
-                        views_done = max(views_done, rzcolor.apply_filter(views, filt, ogs))
+                        filt = falcon_color.ensure_filter(doc, entry.name, entry.category_id, typ)
+                        views_done = max(views_done, falcon_color.apply_filter(views, filt, ogs))
                     except Exception as ex:
                         failures.append(u"{}: {}".format(entry.name, ex))
         if len(targets) == 1:
@@ -281,15 +281,15 @@ class ColorFamilyWindow(forms.WPFWindow):
         if not targets:
             self.status.Text = "Tick a family or a type first."
             return
-        existing = rzcolor.rz_filters(doc)
+        existing = falcon_color.falcon_filters(doc)
         filters = [existing[n] for n in
-                   (rznaming.filter_name(e.name, t) for e, t in targets) if n in existing]
+                   (falcon_naming.filter_name(e.name, t) for e, t in targets) if n in existing]
         with revit.Transaction("Falcon: Remove Color"):
-            count = rzcolor.delete_filters(doc, filters)
+            count = falcon_color.delete_filters(doc, filters)
         self.refresh(u"Removed color from {} item(s).".format(count))
 
     def remove_all_click(self, sender, args):
-        filters = list(rzcolor.rz_filters(doc).values())
+        filters = list(falcon_color.falcon_filters(doc).values())
         if not filters:
             self.status.Text = "There are no Coloring colors in this project."
             return
@@ -297,7 +297,7 @@ class ColorFamilyWindow(forms.WPFWindow):
                            title=TITLE, yes=True, no=True):
             return
         with revit.Transaction("Falcon: Remove All Colors"):
-            count = rzcolor.delete_filters(doc, filters)
+            count = falcon_color.delete_filters(doc, filters)
         self.refresh(u"Removed {} Coloring color(s).".format(count))
 
     def close_click(self, sender, args):
@@ -307,7 +307,7 @@ class ColorFamilyWindow(forms.WPFWindow):
 # ------------------------------------------------------------ element mode
 
 def color_element_mode():
-    color = rzcolor.pick_color()
+    color = falcon_color.pick_color()
     if color is None:
         return
     total = 0
@@ -315,7 +315,7 @@ def color_element_mode():
     pre = list(uidoc.Selection.GetElementIds())
     if pre:
         with revit.Transaction("Falcon: Color Element"):
-            n, views_3d = rzcolor.color_elements(doc, pre, color)
+            n, views_3d = falcon_color.color_elements(doc, pre, color)
             total += n
     while True:
         try:
@@ -324,7 +324,7 @@ def color_element_mode():
         except OperationCanceledException:
             break
         with revit.Transaction("Falcon: Color Element"):
-            n, views_3d = rzcolor.color_elements(doc, [ref.ElementId], color)
+            n, views_3d = falcon_color.color_elements(doc, [ref.ElementId], color)
             total += n
     if total:
         forms.alert(u'Colored {} element(s) in view "{}" and in {} 3D view(s).'.format(

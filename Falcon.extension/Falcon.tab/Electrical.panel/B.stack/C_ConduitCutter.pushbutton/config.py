@@ -14,10 +14,10 @@
 
 from pyrevit import forms
 
-import rzsettings
+import falcon_settings
 
 TITLE = "Falcon - Conduit Cutter Settings"
-SECTION = "rztools_cutter"
+SECTION = "falcon_cutter"
 DEFAULTS = {"clearance_mm": 50.0, "angle_deg": 30.0}
 
 
@@ -35,12 +35,12 @@ def ask_number(prompt, default, low, high):
     return value
 
 
-settings = rzsettings.load(SECTION, DEFAULTS)
+settings = falcon_settings.load(SECTION, DEFAULTS)
 clearance = ask_number("Clear gap between the two conduit groups (mm)",
                        settings["clearance_mm"], 0, 1000)
 if clearance is not None:
     angle = ask_number("Offset elbow angle (degrees)", settings["angle_deg"], 15, 60)
     if angle is not None:
-        rzsettings.save(SECTION, {"clearance_mm": clearance, "angle_deg": angle})
+        falcon_settings.save(SECTION, {"clearance_mm": clearance, "angle_deg": angle})
         forms.alert(u"Saved: {:g} mm clearance, {:g}-degree elbows.".format(clearance, angle),
                     title=TITLE)

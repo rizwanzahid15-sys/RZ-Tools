@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add the shared conduit/colour libraries and the Coloring, Pull Box and Conduit Cutter pushbuttons to the RZ Tools pyRevit extension.
+**Goal:** Add the shared conduit/colour libraries and the Coloring, Pull Box and Conduit Cutter pushbuttons to the Falcon pyRevit extension.
 
-**Architecture:** All decision-making maths (walking a run, bend counting, crossing offsets, direction grouping, name sanitising) lives in Revit-free modules (`rzgeom.py`, `rznaming.py`) covered by pytest. Thin Revit-API modules (`rzconduit.py`, `rzcolor.py`, `rzsettings.py`) turn those decisions into model changes. Pushbutton scripts only collect input, call the libraries inside one `TransactionGroup`, and report.
+**Architecture:** All decision-making maths (walking a run, bend counting, crossing offsets, direction grouping, name sanitising) lives in Revit-free modules (`falcon_geom.py`, `falcon_naming.py`) covered by pytest. Thin Revit-API modules (`falcon_conduit.py`, `falcon_color.py`, `falcon_settings.py`) turn those decisions into model changes. Pushbutton scripts only collect input, call the libraries inside one `TransactionGroup`, and report.
 
 **Tech Stack:** pyRevit, IronPython 2.7, Revit API (target Revit 2025, safe 2020–2027), WPF XAML via `pyrevit.forms.WPFWindow`; CPython 3.12 + pytest + pyflakes for offline checks.
 
@@ -12,14 +12,14 @@
 
 ## Global Constraints
 
-- IronPython 2.7-safe syntax in every `.py` under `RZTools.extension/` (no f-strings, no type hints, no `print` statement, no `nonlocal`).
-- `rzgeom.py` and `rznaming.py` import nothing from Revit/pyRevit/clr — stdlib `math` only.
-- Every script/lib file starts with the same metadata header block style as `RZTools.extension/RZTools.tab/Markup.panel/D_RedlineMarkup.pushbutton/script.py` (Author: Rizwan Zahid, Target Revit 2020 - 2027, IronPython 2.7, Version 1.0.0, dates 2026-11-12).
+- IronPython 2.7-safe syntax in every `.py` under `Falcon.extension/` (no f-strings, no type hints, no `print` statement, no `nonlocal`).
+- `falcon_geom.py` and `falcon_naming.py` import nothing from Revit/pyRevit/clr — stdlib `math` only.
+- Every script/lib file starts with the same metadata header block style as `Falcon.extension/Falcon.tab/Markup.panel/D_RedlineMarkup.pushbutton/script.py` (Author: Rizwan Zahid, Target Revit 2020 - 2027, IronPython 2.7, Version 1.0.0, dates 2026-11-12).
 - Internal lengths are Revit feet; user-facing lengths are mm or m. `1 ft = 304.8 mm` exactly.
 - Each tool run is one `revit.TransactionGroup(...)` assimilated → single Ctrl+Z (Color Element excepted: commit per pick, like Markup).
 - Per-element failures are caught, skipped, and listed in the final report as `<element id>: <reason>`; never abort the run for one element.
 - Unexpected exception → roll back the TransactionGroup and show the traceback in the pyRevit output window.
-- Filter names created by Coloring start with `RZ_COLOR_`.
+- Filter names created by Coloring start with `FALCON_COLOR_`.
 - Defaults: pull box spacing 15 m, bends 2, after-bend offset 300 mm, bend angle window 80°–100°, vertical = more than 45° from horizontal; cutter clearance 50 mm, angle 30°, direction grouping tolerance 5°.
 
 ## Review Focus
@@ -35,8 +35,8 @@
 ### Task 1: Offline test harness + vector & unit helpers
 
 **Files:**
-- Create: `RZTools.extension/lib/rzgeom.py`
-- Create: `tests/conftest.py`, `tests/test_rzgeom_basics.py`
+- Create: `Falcon.extension/lib/falcon_geom.py`
+- Create: `tests/conftest.py`, `tests/test_falcon_geom_basics.py`
 - Create: `requirements-dev.txt` (`pytest`, `pyflakes`)
 
 **Interfaces:**
@@ -49,7 +49,7 @@
   `is_vertical(direction, max_deg=45.0) -> bool` (angle from horizontal plane > max_deg),
   `point_along(p0, p1, dist) -> point` (dist from p0 toward p1).
 
-- [ ] **Step 1: Write failing tests** — `tests/conftest.py` inserts `RZTools.extension/lib` into `sys.path`. Tests:
+- [ ] **Step 1: Write failing tests** — `tests/conftest.py` inserts `Falcon.extension/lib` into `sys.path`. Tests:
   ```python
   def test_units(): assert mm_to_ft(304.8) == 1.0; assert m_to_ft(15) == pytest.approx(49.2126, abs=1e-4); assert ft_to_mm(1) == 304.8
   def test_bend_angles():
@@ -62,13 +62,13 @@
   def test_vnorm_zero_raises(): pytest.raises(ValueError, vnorm, (0,0,0))
   ```
 - [ ] **Step 2: Set up venv & run** — `python -m venv .venv && .venv/Scripts/python -m pip install -r requirements-dev.txt`; add `.venv/` to `.gitignore`. Run `.venv/Scripts/python -m pytest tests -q` → FAIL (import error).
-- [ ] **Step 3: Implement the functions above in `rzgeom.py`** with the header block; stdlib `math` only.
+- [ ] **Step 3: Implement the functions above in `falcon_geom.py`** with the header block; stdlib `math` only.
 - [ ] **Step 4: Run** `.venv/Scripts/python -m pytest tests -q` → all pass.
-- [ ] **Step 5: Commit** `feat: add rzgeom vector and unit helpers with tests`
+- [ ] **Step 5: Commit** `feat: add falcon_geom vector and unit helpers with tests`
 
 ### Task 2: Direction grouping, plan intersection, nearest end
 
-**Files:** Modify `RZTools.extension/lib/rzgeom.py`; Create `tests/test_rzgeom_plan.py`
+**Files:** Modify `Falcon.extension/lib/falcon_geom.py`; Create `tests/test_falcon_geom_plan.py`
 
 **Interfaces:**
 - Produces:
@@ -96,10 +96,10 @@
 
 ### Task 3: Pull box planner
 
-**Files:** Modify `RZTools.extension/lib/rzgeom.py`; Create `tests/test_rzgeom_pullbox.py`
+**Files:** Modify `Falcon.extension/lib/falcon_geom.py`; Create `tests/test_falcon_geom_pullbox.py`
 
 **Interfaces:**
-- Consumes: nothing Revit. Input is a run as a list of dicts produced later by `rzconduit.trace_run`:
+- Consumes: nothing Revit. Input is a run as a list of dicts produced later by `falcon_conduit.trace_run`:
   `{"kind": "straight"|"bend"|"fitting"|"box", "length": float, "vertical": bool}` (`vertical` only meaningful for straights).
 - Produces: `plan_pull_boxes(run, max_dist, max_bends, after_bend, start_bends=0) -> list[(seg_index, dist_along)]`
 
@@ -146,7 +146,7 @@ for i, seg in enumerate(run):
 
 ### Task 4: Crossing offset geometry
 
-**Files:** Modify `RZTools.extension/lib/rzgeom.py`; Create `tests/test_rzgeom_offset.py`
+**Files:** Modify `Falcon.extension/lib/falcon_geom.py`; Create `tests/test_falcon_geom_offset.py`
 
 **Interfaces:**
 - Produces:
@@ -177,46 +177,46 @@ for i, seg in enumerate(run):
 
 ### Task 5: Filter name sanitiser
 
-**Files:** Create `RZTools.extension/lib/rznaming.py`, `tests/test_rznaming.py`
+**Files:** Create `Falcon.extension/lib/falcon_naming.py`, `tests/test_falcon_naming.py`
 
 **Interfaces:**
-- Produces: `PREFIX = "RZ_COLOR_"`; `filter_name(family, type_name=None) -> str` → `RZ_COLOR_<Family>` or `RZ_COLOR_<Family>__<Type>`; each forbidden char in ``\:{}[]|;<>?`~`` replaced by `_`; `parse_filter_name(name) -> (family, type_or_None) or None` (returns the sanitised parts; None if not RZ_COLOR_).
+- Produces: `PREFIX = "FALCON_COLOR_"`; `filter_name(family, type_name=None) -> str` → `FALCON_COLOR_<Family>` or `FALCON_COLOR_<Family>__<Type>`; each forbidden char in ``\:{}[]|;<>?`~`` replaced by `_`; `parse_filter_name(name) -> (family, type_or_None) or None` (returns the sanitised parts; None if not FALCON_COLOR_).
 
 - [ ] **Step 1: Failing tests** (Review Focus 5)
   ```python
-  def test_plain(): assert filter_name("PVC Box") == "RZ_COLOR_PVC Box"
-  def test_type(): assert filter_name("Fixture","600x1200 - 120") == "RZ_COLOR_Fixture__600x1200 - 120"
-  def test_forbidden(): assert filter_name("Box: 2-way [20mm]","T{1}") == "RZ_COLOR_Box_ 2-way _20mm___T_1_"
-  def test_parse(): assert parse_filter_name("RZ_COLOR_A__B") == ("A","B"); assert parse_filter_name("Other") is None
+  def test_plain(): assert filter_name("PVC Box") == "FALCON_COLOR_PVC Box"
+  def test_type(): assert filter_name("Fixture","600x1200 - 120") == "FALCON_COLOR_Fixture__600x1200 - 120"
+  def test_forbidden(): assert filter_name("Box: 2-way [20mm]","T{1}") == "FALCON_COLOR_Box_ 2-way _20mm___T_1_"
+  def test_parse(): assert parse_filter_name("FALCON_COLOR_A__B") == ("A","B"); assert parse_filter_name("Other") is None
   ```
 - [ ] **Step 2–4:** FAIL → implement → PASS.
-- [ ] **Step 5: Commit** `feat: add RZ colour filter naming`
+- [ ] **Step 5: Commit** `feat: add Falcon colour filter naming`
 
 ### Task 6: Revit libraries — settings and colour
 
-**Files:** Create `RZTools.extension/lib/rzsettings.py`, `RZTools.extension/lib/rzcolor.py`
+**Files:** Create `Falcon.extension/lib/falcon_settings.py`, `Falcon.extension/lib/falcon_color.py`
 
 **Interfaces:**
-- `rzsettings.load(section, defaults) -> dict` (each key from `script.get_config(section).get_option(key, default)`); `rzsettings.save(section, values)` (setattr + `script.save_config()`).
-- `rzcolor.eid_int(eid) -> int` (`.Value` if present else `.IntegerValue`).
-- `rzcolor.pick_color(initial=None) -> DB.Color or None` — `Autodesk.Revit.UI.ColorSelectionDialog`; None on cancel.
-- `rzcolor.color_override(doc, color) -> DB.OverrideGraphicSettings` — projection line colour + weight 6, surface foreground pattern = first solid fill `FillPatternElement`, surface foreground colour; cut line/fill same colour.
-- `rzcolor.target_views(doc, include_3d) -> list[DB.View]` — for every non-template view: its template if `ViewTemplateId` valid else itself; plus unused templates; dedupe by id; skip sheets, schedules, legends, project browser/system views, views where `AreGraphicsOverridesAllowed()` is False; skip `ViewType.ThreeD` unless include_3d.
-- `rzcolor.ensure_filter(doc, family_name, category_id, type_name=None) -> DB.ParameterFilterElement` — find by `rznaming.filter_name` or create; rules via `ParameterFilterRuleFactory.CreateEqualsRule(ElementId(BuiltInParameter.ALL_MODEL_FAMILY_NAME), value)` (try 2-arg, fall back to 3-arg with `True` for pre-2022), plus `ALL_MODEL_TYPE_NAME` when type_name, combined in one `ElementParameterFilter`.
-- `rzcolor.apply_filter(views, filt, ogs) -> int` — `AddFilter` if missing, `SetFilterOverrides`, `SetFilterVisibility(True)`; count of views changed; per-view failures skipped.
-- `rzcolor.rz_filters(doc) -> dict[name, ParameterFilterElement]`; `rzcolor.filter_color(doc, filt) -> DB.Color or None` (first view having it); `rzcolor.delete_filters(doc, filters) -> int`.
-- `rzcolor.color_elements(doc, ids, color) -> (int, int)` — applies `color_override` via `rztools_markup.apply_override` in the active view and all non-template `View3D`; returns `(elements, views_3d)`.
+- `falcon_settings.load(section, defaults) -> dict` (each key from `script.get_config(section).get_option(key, default)`); `falcon_settings.save(section, values)` (setattr + `script.save_config()`).
+- `falcon_color.eid_int(eid) -> int` (`.Value` if present else `.IntegerValue`).
+- `falcon_color.pick_color(initial=None) -> DB.Color or None` — `Autodesk.Revit.UI.ColorSelectionDialog`; None on cancel.
+- `falcon_color.color_override(doc, color) -> DB.OverrideGraphicSettings` — projection line colour + weight 6, surface foreground pattern = first solid fill `FillPatternElement`, surface foreground colour; cut line/fill same colour.
+- `falcon_color.target_views(doc, include_3d) -> list[DB.View]` — for every non-template view: its template if `ViewTemplateId` valid else itself; plus unused templates; dedupe by id; skip sheets, schedules, legends, project browser/system views, views where `AreGraphicsOverridesAllowed()` is False; skip `ViewType.ThreeD` unless include_3d.
+- `falcon_color.ensure_filter(doc, family_name, category_id, type_name=None) -> DB.ParameterFilterElement` — find by `falcon_naming.filter_name` or create; rules via `ParameterFilterRuleFactory.CreateEqualsRule(ElementId(BuiltInParameter.ALL_MODEL_FAMILY_NAME), value)` (try 2-arg, fall back to 3-arg with `True` for pre-2022), plus `ALL_MODEL_TYPE_NAME` when type_name, combined in one `ElementParameterFilter`.
+- `falcon_color.apply_filter(views, filt, ogs) -> int` — `AddFilter` if missing, `SetFilterOverrides`, `SetFilterVisibility(True)`; count of views changed; per-view failures skipped.
+- `falcon_color.falcon_filters(doc) -> dict[name, ParameterFilterElement]`; `falcon_color.filter_color(doc, filt) -> DB.Color or None` (first view having it); `falcon_color.delete_filters(doc, filters) -> int`.
+- `falcon_color.color_elements(doc, ids, color) -> (int, int)` — applies `color_override` via `falcon_markup.apply_override` in the active view and all non-template `View3D`; returns `(elements, views_3d)`.
 
 - [ ] **Step 1:** Implement both modules with header blocks.
-- [ ] **Step 2: Static check** `.venv/Scripts/python -m pyflakes RZTools.extension/lib/rzsettings.py RZTools.extension/lib/rzcolor.py` → no undefined names (unused-import warnings for clr references acceptable only if justified by a comment).
+- [ ] **Step 2: Static check** `.venv/Scripts/python -m pyflakes Falcon.extension/lib/falcon_settings.py Falcon.extension/lib/falcon_color.py` → no undefined names (unused-import warnings for clr references acceptable only if justified by a comment).
 - [ ] **Step 3: Commit** `feat: add settings and colour Revit helpers`
 
 ### Task 7: Revit library — conduit helpers
 
-**Files:** Create `RZTools.extension/lib/rzconduit.py`
+**Files:** Create `Falcon.extension/lib/falcon_conduit.py`
 
 **Interfaces:**
-- Consumes: `rzgeom` (`bend_angle_deg`, `is_bend`, `is_vertical`, `vnorm`), `rzcolor.eid_int`.
+- Consumes: `falcon_geom` (`bend_angle_deg`, `is_bend`, `is_vertical`, `vnorm`), `falcon_color.eid_int`.
 - Produces:
   `xyz(t) -> DB.XYZ`, `tup(xyz) -> tuple`;
   `ends(conduit) -> (XYZ, XYZ)`; `outer_radius(conduit) -> float` (`RBS_CONDUIT_OUTER_DIAM_PARAM`/2, fallback `RBS_CONDUIT_DIAMETER_PARAM`/2);
@@ -225,45 +225,45 @@ for i, seg in enumerate(run):
   `split_conduit(doc, conduit, point) -> Conduit` (original keeps p0→point; new piece point→p1 takes over every connection that was on the old p1 end);
   `connect_elbow(doc, c1, c2) -> FamilyInstance or None` (`doc.Create.NewElbowFitting` on the nearest connector pair; None + no exception if it fails);
   `classify_fitting(fi) -> "bend"|"fitting"|"box"|"branch"` (`>2` connectors → branch; category Electrical Fixtures/Equipment or family name containing "box"/"junction" (case-insensitive) → box; 2 connectors with `is_bend(bend_angle_deg(...))` → bend; else fitting);
-  `trace_run(doc, conduit, start_point) -> list[dict]` — run items `{"kind", "length", "vertical", "element", "p_start", "p_end"}` from the nearest end of `conduit` (via `rzgeom.nearest_end`) following connected connectors; stops at an end with no connection, at a `branch` (appended as last item with kind "branch"), or at an element already visited; fitting length = distance between its two connector origins;
+  `trace_run(doc, conduit, start_point) -> list[dict]` — run items `{"kind", "length", "vertical", "element", "p_start", "p_end"}` from the nearest end of `conduit` (via `falcon_geom.nearest_end`) following connected connectors; stops at an end with no connection, at a `branch` (appended as last item with kind "branch"), or at an element already visited; fitting length = distance between its two connector origins;
   `box_symbols(doc) -> list[(label, FamilySymbol)]` (categories Electrical Fixtures, Conduit Fittings, Electrical Equipment; those whose family name contains box/junction first; label `Family : Type`; sorted);
   `place_box(doc, symbol, conduit, point) -> (FamilyInstance, bool connected)` — activate symbol, `NewFamilyInstance(point, symbol, level, StructuralType.NonStructural)`, set `INSTANCE_ELEVATION_PARAM` = point.Z − level elevation, rotate about vertical axis through point to the conduit's plan angle; regenerate; if the instance has exactly 2 conduit connectors: `split_conduit` at point, pull each piece's touching end back to the matching box connector origin, `ConnectTo`; return connected flag.
 
 - [ ] **Step 1:** Implement with header block.
-- [ ] **Step 2:** `.venv/Scripts/python -m pyflakes RZTools.extension/lib/rzconduit.py` → clean.
+- [ ] **Step 2:** `.venv/Scripts/python -m pyflakes Falcon.extension/lib/falcon_conduit.py` → clean.
 - [ ] **Step 3: Commit** `feat: add conduit Revit helpers`
 
 ### Task 8: Coloring pushbutton
 
-**Files:** Create `RZTools.extension/RZTools.tab/Graphics.panel/Coloring.pushbutton/{script.py,bundle.yaml,ColorFamily.xaml}`
+**Files:** Create `Falcon.extension/Falcon.tab/Graphics.panel/Coloring.pushbutton/{script.py,bundle.yaml,ColorFamily.xaml}`
 
-**Interfaces:** Consumes `rzcolor.*`, `rznaming.*`, `rztools_markup` pick loop pattern.
+**Interfaces:** Consumes `falcon_color.*`, `falcon_naming.*`, `falcon_markup` pick loop pattern.
 
 - [ ] **Step 1: script.py** — `forms.CommandSwitchWindow.show(["Color Family", "Color Element"], message="What do you want to color?")`.
-  - Color Element: `pick_color()`; preselection then `PickObject` loop (Esc ends), each pick its own `revit.Transaction("RZTools: Color Element")` calling `color_elements`; final `forms.alert("Colored N element(s) in view \"<name>\" and in M 3D view(s).")`.
+  - Color Element: `pick_color()`; preselection then `PickObject` loop (Esc ends), each pick its own `revit.Transaction("Falcon: Color Element")` calling `color_elements`; final `forms.alert("Colored N element(s) in view \"<name>\" and in M 3D view(s).")`.
   - Color Family: `ColorFamilyWindow(forms.WPFWindow)` loading `ColorFamily.xaml`: TextBox `search`, CheckBox `only_used` (default checked; used = family has at least one placed instance), TreeView `tree` of TreeViewItems whose headers are a horizontal StackPanel [CheckBox, 12×12 swatch Rectangle filled with current filter colour if any, TextBlock "Family  [Category]" / "Type"], CheckBox `also_3d`, Buttons `choose_btn`, `remove_btn`, `remove_all_btn`, `close_btn`, TextBlock `status`. Families from `FilteredElementCollector(doc).OfClass(DB.Family)` excluding annotation categories, plus system-family categories Conduits, Cable Trays, Pipes, Ducts (types grouped under their family name from `ALL_MODEL_FAMILY_NAME`). Search filters by substring on family or type name, case-insensitive.
   - Choose color: ticked type nodes → one filter per type; ticked family node with no ticked types → one family filter. In a TransactionGroup: `ensure_filter`, `apply_filter(target_views(doc, also_3d), …)`; refresh swatches; status `Colored <what> in N view(s).` + ` 3D views were left out.` when not ticked.
-  - Remove from selected / Remove all: `delete_filters` (all = `rz_filters(doc).values()` after `forms.alert(..., yes=True, no=True)` confirm); status with count.
+  - Remove from selected / Remove all: `delete_filters` (all = `falcon_filters(doc).values()` after `forms.alert(..., yes=True, no=True)` confirm); status with count.
 - [ ] **Step 2: bundle.yaml** — title `Coloring`, tooltip from spec 5.1, author Rizwan Zahid.
 - [ ] **Step 3:** pyflakes on script.py → clean; XAML well-formed check: `.venv/Scripts/python -c "import xml.dom.minidom,sys;xml.dom.minidom.parse(sys.argv[1])" <xaml>`.
 - [ ] **Step 4: Commit** `feat: add Coloring tool`
 
 ### Task 9: Pull Box pushbutton
 
-**Files:** Create `RZTools.extension/RZTools.tab/Electrical.panel/I_PullBox.pushbutton/{script.py,bundle.yaml,PullBox.xaml}`
+**Files:** Create `Falcon.extension/Falcon.tab/Electrical.panel/I_PullBox.pushbutton/{script.py,bundle.yaml,PullBox.xaml}`
 
-**Interfaces:** Consumes `rzgeom.plan_pull_boxes`, `rzgeom.m_to_ft`, `rzgeom.mm_to_ft`, `rzgeom.point_along`, `rzconduit.trace_run`, `rzconduit.box_symbols`, `rzconduit.place_box`, `rzsettings.load/save` (section `rztools_pullbox`, keys `distance_m=15`, `bends=2`, `riser=False`, `box_label=""`).
+**Interfaces:** Consumes `falcon_geom.plan_pull_boxes`, `falcon_geom.m_to_ft`, `falcon_geom.mm_to_ft`, `falcon_geom.point_along`, `falcon_conduit.trace_run`, `falcon_conduit.box_symbols`, `falcon_conduit.place_box`, `falcon_settings.load/save` (section `falcon_pullbox`, keys `distance_m=15`, `bends=2`, `riser=False`, `box_label=""`).
 
-- [ ] **Step 1: script.py** — dialog (title "Pull Box", labels exactly: "Distance between pull boxes (m)", "Bends before a pull box", "The panel riser bend is hidden in plan, so it counts as the first bend", "Junction box", buttons Start/Cancel); validate distance > 0 and bends ≥ 1 (inline message, dialog stays open). No box families → alert "Load a junction box family first." and exit. `PickObject` with conduit-only `ISelectionFilter`, prompt "Click the conduit at the panel end". `trace_run` → `plan_pull_boxes(run, m_to_ft(d), bends, mm_to_ft(300), 1 if riser else 0)` → place boxes **from last to first** (so splitting doesn't shift earlier segments) at `point_along(seg.p_start, seg.p_end, dist)` on `seg.element`. One TransactionGroup "RZTools: Pull Box". Report: "Placed N pull box(es) along X m of conduit with Y bends." + branch note "Run branches at <id>; stopped there." + skipped list. Zero boxes → "No pull box needed: run is X m with Y bends."
+- [ ] **Step 1: script.py** — dialog (title "Pull Box", labels exactly: "Distance between pull boxes (m)", "Bends before a pull box", "The panel riser bend is hidden in plan, so it counts as the first bend", "Junction box", buttons Start/Cancel); validate distance > 0 and bends ≥ 1 (inline message, dialog stays open). No box families → alert "Load a junction box family first." and exit. `PickObject` with conduit-only `ISelectionFilter`, prompt "Click the conduit at the panel end". `trace_run` → `plan_pull_boxes(run, m_to_ft(d), bends, mm_to_ft(300), 1 if riser else 0)` → place boxes **from last to first** (so splitting doesn't shift earlier segments) at `point_along(seg.p_start, seg.p_end, dist)` on `seg.element`. One TransactionGroup "Falcon: Pull Box". Report: "Placed N pull box(es) along X m of conduit with Y bends." + branch note "Run branches at <id>; stopped there." + skipped list. Zero boxes → "No pull box needed: run is X m with Y bends."
 - [ ] **Step 2: bundle.yaml** — title `Pull Box`.
 - [ ] **Step 3:** pyflakes + XAML parse → clean.
 - [ ] **Step 4: Commit** `feat: add Pull Box tool`
 
 ### Task 10: Conduit Cutter pushbutton
 
-**Files:** Create `RZTools.extension/RZTools.tab/Electrical.panel/E_ConduitCutter.pushbutton/{script.py,config.py,bundle.yaml}`
+**Files:** Create `Falcon.extension/Falcon.tab/Electrical.panel/E_ConduitCutter.pushbutton/{script.py,config.py,bundle.yaml}`
 
-**Interfaces:** Consumes `rzgeom` (`group_by_direction`, `plan_intersection`, `crossing_sin`, `required_rise`, `slope_run`, `offset_spans`, `dogleg_polyline`, `mm_to_ft`), `rzconduit` (`ends`, `outer_radius`, `new_conduit_like`, `connect_elbow`, `end_connector`), `rzsettings` (section `rztools_cutter`, `clearance_mm=50`, `angle_deg=30`).
+**Interfaces:** Consumes `falcon_geom` (`group_by_direction`, `plan_intersection`, `crossing_sin`, `required_rise`, `slope_run`, `offset_spans`, `dogleg_polyline`, `mm_to_ft`), `falcon_conduit` (`ends`, `outer_radius`, `new_conduit_like`, `connect_elbow`, `end_connector`), `falcon_settings` (section `falcon_cutter`, `clearance_mm=50`, `angle_deg=30`).
 
 - [ ] **Step 1: script.py**
   - Selection: straight conduits from pre-selection, else `PickObjects(ObjectType.Element, conduit_filter, "Select the crossing straight conduits, then click Finish")`.
@@ -271,8 +271,8 @@ for i, seg in enumerate(run):
   - `forms.alert("Which way should the smaller group of conduits go?", sub_msg="The group with fewer conduits is moved around the bigger group, so fewer conduits get offsets.", options=["Down - go under the other conduits", "Up - go over the other conduits"])`; None → exit.
   - Per mover: crossings = for each other conduit with a `plan_intersection` hit, `(t*L, (r_other + clearance + r_mover) / crossing_sin)`; no crossings → skip "does not cross". `rise = required_rise(...)`; 0 → skip "already clear". `run = slope_run(rise, angle)`; `spans = offset_spans(L, crossings, run, end_clear=2*r_mover + mm_to_ft(100))` (ValueError → skip with reason "crossing too close to the conduit end"). `pts = dogleg_polyline(...)`.
   - Build: remember connections on the old p1 end; set original curve to `pts[0]→pts[1]`; `new_conduit_like` for each consecutive pair after; move remembered connections to the last piece's end connector; `connect_elbow` for each consecutive pair (failure → listed, pieces left in place).
-  - One TransactionGroup "RZTools: Conduit Cutter". Report: "Created N upward|downward offset(s) covering M crossing(s) with <angle>-degree elbows." + "Revit's conduit settings choose the fittings and minimum bend settings." + Skipped list.
-- [ ] **Step 2: config.py** — `forms.ask_for_string` twice (clearance mm, angle °; angle must be 15–60, clearance ≥ 0) → `rzsettings.save`.
+  - One TransactionGroup "Falcon: Conduit Cutter". Report: "Created N upward|downward offset(s) covering M crossing(s) with <angle>-degree elbows." + "Revit's conduit settings choose the fittings and minimum bend settings." + Skipped list.
+- [ ] **Step 2: config.py** — `forms.ask_for_string` twice (clearance mm, angle °; angle must be 15–60, clearance ≥ 0) → `falcon_settings.save`.
 - [ ] **Step 3: bundle.yaml** — title `Conduit Cutter`, tooltip mentions Shift+click for settings.
 - [ ] **Step 4:** pyflakes on both → clean.
 - [ ] **Step 5: Commit** `feat: add Conduit Cutter tool`
@@ -284,5 +284,5 @@ for i, seg in enumerate(run):
 - [ ] **Step 1: Icons** — generate with Pillow from a scratch script (not committed): Coloring = 4 coloured squares; Pull Box = conduit line with orange square at the end; Conduit Cutter = straight line crossed by a line with a 30° hump.
 - [ ] **Step 2: Checklists** — each lists setup (Revit 2025 model with …), numbered steps, expected result, and the Review Focus case for that tool.
 - [ ] **Step 3: README** — new "Electrical" and "Graphics" sections describing the three tools in modeller language + Shift+click settings + how to run offline tests.
-- [ ] **Step 4: Full verification** — `.venv/Scripts/python -m pytest tests -q` → all pass; `.venv/Scripts/python -m pyflakes RZTools.extension` → no undefined names.
+- [ ] **Step 4: Full verification** — `.venv/Scripts/python -m pytest tests -q` → all pass; `.venv/Scripts/python -m pyflakes Falcon.extension` → no undefined names.
 - [ ] **Step 5: Commit** `docs: add icons, README and test checklists for batch 1`

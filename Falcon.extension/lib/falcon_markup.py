@@ -1,7 +1,7 @@
 # ============================================================
 # Shared Library
 # ============================================================
-# Module Name    : rztools_markup
+# Module Name    : falcon_markup
 # Purpose        : Shared logic for the Falcon markup pushbuttons
 #                  (Redline Markup, Blue Markup, Clear) - apply or
 #                  remove a projection-line color override on picked
@@ -22,7 +22,7 @@ from pyrevit import revit, DB, forms, script
 from Autodesk.Revit.UI.Selection import ObjectType
 from Autodesk.Revit.Exceptions import OperationCanceledException
 
-RZTOOLS_SUITE_VERSION = "1.0.0"
+FALCON_SUITE_VERSION = "1.0.0"
 
 
 def build_line_override(color):

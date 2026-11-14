@@ -1,6 +1,6 @@
 import pytest
 
-from rzgeom import (pair_bundles, bundle_spacing, bundles, home_run_label,
+from falcon_geom import (pair_bundles, bundle_spacing, bundles, home_run_label,
                     arrow_points, mask_rect)
 
 

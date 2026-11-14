@@ -26,7 +26,7 @@
 #
 # Dependencies   :
 #   - pyRevit, Revit API
-#   - Falcon.extension/lib/rzgeom.py, rzconduit.py, rzview.py, rzsettings.py
+#   - Falcon.extension/lib/falcon_geom.py, falcon_conduit.py, falcon_view.py, falcon_settings.py
 #
 # Features       :
 #   - Re-running replaces the masks it made before in this view
@@ -49,14 +49,14 @@ from System.Collections.Generic import List
 from pyrevit import revit, DB, forms, script
 from Autodesk.Revit.DB.Electrical import Conduit
 
-import rzgeom
-import rzconduit
-import rzcolor
-import rzview
-import rzsettings
+import falcon_geom
+import falcon_conduit
+import falcon_color
+import falcon_view
+import falcon_settings
 
 TITLE = "Falcon - Line Cutter"
-SECTION = "rztools_linecutter"
+SECTION = "falcon_linecutter"
 MARK = "FALCON_LINE_CUTTER"
 MASK_TYPE = "Falcon Mask"
 EDGE_STYLE = "Falcon Line Cutter"
@@ -65,16 +65,16 @@ MIN_SIN = math.sin(math.radians(10.0))
 
 doc = revit.doc
 uidoc = revit.uidoc
-tup = rzconduit.tup
+tup = falcon_conduit.tup
 
 
 class Run(object):
     def __init__(self, conduit):
         self.conduit = conduit
-        p0, p1 = rzconduit.ends(conduit)
+        p0, p1 = falcon_conduit.ends(conduit)
         self.p0, self.p1 = tup(p0), tup(p1)
-        self.dir = rzgeom.vsub(self.p1, self.p0)
-        self.r = rzconduit.outer_radius(conduit)
+        self.dir = falcon_geom.vsub(self.p1, self.p0)
+        self.r = falcon_conduit.outer_radius(conduit)
 
     def top_at(self, t):
         return self.p0[2] + t * (self.p1[2] - self.p0[2]) + self.r
@@ -82,14 +82,14 @@ class Run(object):
 
 def runs_in_scope(view):
     picked = [doc.GetElement(i) for i in uidoc.Selection.GetElementIds()]
-    picked = [e for e in picked if rzconduit.is_conduit(e)]
+    picked = [e for e in picked if falcon_conduit.is_conduit(e)]
     if not picked:
         picked = list(DB.FilteredElementCollector(doc, view.Id).OfClass(Conduit))
     runs = []
     for c in picked:
         if isinstance(c.Location.Curve, DB.Line):
             run = Run(c)
-            if not rzgeom.is_vertical(run.dir):
+            if not falcon_geom.is_vertical(run.dir):
                 runs.append(run)
     return runs
 
@@ -105,7 +105,7 @@ def _solid_fill_id():
 def mask_type():
     types = list(DB.FilteredElementCollector(doc).OfClass(DB.FilledRegionType))
     for t in types:
-        if rzconduit.element_name(t) == MASK_TYPE:
+        if falcon_conduit.element_name(t) == MASK_TYPE:
             return t
     if not types:
         raise ValueError("this project has no filled region types to copy")
@@ -130,7 +130,7 @@ def invisible_line_style():
     lines_cat = doc.Settings.Categories.get_Item(DB.BuiltInCategory.OST_Lines)
     invisible_id = int(DB.BuiltInCategory.OST_InvisibleLines)
     for sub in lines_cat.SubCategories:
-        if rzcolor.eid_int(sub.Id) == invisible_id or sub.Name == "<Invisible lines>":
+        if falcon_color.eid_int(sub.Id) == invisible_id or sub.Name == "<Invisible lines>":
             return sub.GetGraphicsStyle(DB.GraphicsStyleType.Projection)
     return None
 
@@ -172,27 +172,27 @@ def crossings(runs, gap):
     for i in range(len(runs)):
         for j in range(i + 1, len(runs)):
             a, b = runs[i], runs[j]
-            hit = rzgeom.plan_intersection(a.p0, a.p1, b.p0, b.p1)
+            hit = falcon_geom.plan_intersection(a.p0, a.p1, b.p0, b.p1)
             if hit is None:
                 continue
             t, u = hit
             top_a, top_b = a.top_at(t), b.top_at(u)
-            if abs(top_a - top_b) < rzgeom.mm_to_ft(1):
+            if abs(top_a - top_b) < falcon_geom.mm_to_ft(1):
                 continue
             lower, upper = (a, b) if top_a < top_b else (b, a)
-            center = rzgeom.point_along(a.p0, a.p1, t * rzgeom.vlen(a.dir))
-            sin = rzgeom.crossing_sin(lower.dir, upper.dir)
+            center = falcon_geom.point_along(a.p0, a.p1, t * falcon_geom.vlen(a.dir))
+            sin = falcon_geom.crossing_sin(lower.dir, upper.dir)
             if sin < MIN_SIN:
                 continue   # nearly parallel - a mask would be huge
             along = (2 * upper.r + 2 * gap) / sin
-            across = 2 * lower.r + rzgeom.mm_to_ft(SIDE_EXTRA_MM)
+            across = 2 * lower.r + falcon_geom.mm_to_ft(SIDE_EXTRA_MM)
             found.append((center, lower, upper, along, across))
     return found
 
 
 def make_mask(view, type_id, style, edge_style, center, lower, upper, along, across):
-    z = rzview.plan_z(view)
-    pts = [rzview.at_z(p, z) for p in rzgeom.mask_rect(center, lower.dir, along, across)]
+    z = falcon_view.plan_z(view)
+    pts = [falcon_view.at_z(p, z) for p in falcon_geom.mask_rect(center, lower.dir, along, across)]
     loop = DB.CurveLoop()
     for a, b in zip(pts, pts[1:] + pts[:1]):
         loop.Append(DB.Line.CreateBound(a, b))
@@ -208,8 +208,8 @@ def make_mask(view, type_id, style, edge_style, center, lower, upper, along, acr
     # The mask covers everything under it, including the upper conduit,
     # so redraw the upper conduit's two edges on top of the mask.
     reach = math.hypot(along, across) + 2 * upper.r
-    for a, b in rzgeom.upper_edges(center, upper.dir, upper.r, reach):
-        line = rzview.detail_line(doc, view, rzview.at_z(a, z), rzview.at_z(b, z))
+    for a, b in falcon_geom.upper_edges(center, upper.dir, upper.r, reach):
+        line = falcon_view.detail_line(doc, view, falcon_view.at_z(a, z), falcon_view.at_z(b, z))
         line.LineStyle = edge_style
     return region
 
@@ -219,10 +219,10 @@ def main():
         forms.alert("Please open a Revit project first.", title=TITLE)
         return
     view = doc.ActiveView
-    if not rzview.is_plan(view):
+    if not falcon_view.is_plan(view):
         forms.alert("Open a plan view first.", title=TITLE)
         return
-    gap = rzgeom.mm_to_ft(rzsettings.load(SECTION, {"gap_mm": 50.0})["gap_mm"])
+    gap = falcon_geom.mm_to_ft(falcon_settings.load(SECTION, {"gap_mm": 50.0})["gap_mm"])
     runs = runs_in_scope(view)
     found = crossings(runs, gap)
 
@@ -236,7 +236,7 @@ def main():
                 edges = edge_line_style()
                 for center, lower, upper, along, across in found:
                     try:
-                        rzconduit.all_or_nothing(doc, lambda: make_mask(
+                        falcon_conduit.all_or_nothing(doc, lambda: make_mask(
                             view, type_id, style, edges, center, lower, upper,
                             along, across))
                         made += 1

@@ -28,7 +28,7 @@
 # Dependencies   :
 #   - pyRevit
 #   - Revit API
-#   - Falcon.extension/lib/rztools_markup.py
+#   - Falcon.extension/lib/falcon_markup.py
 #
 # Features       :
 #   - Clears markup on elements already selected before the tool is run
@@ -49,6 +49,6 @@
 # Copyright      : (c) Rizwan Zahid. All Rights Reserved
 # ============================================================
 
-import rztools_markup as markup
+import falcon_markup as markup
 
 markup.run_markup_tool("Clear", None, "Falcon: Clear Markup")

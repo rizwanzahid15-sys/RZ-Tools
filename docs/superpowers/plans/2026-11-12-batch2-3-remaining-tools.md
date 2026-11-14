@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add Junction Box, Convert Line, Connect Conduit, Multi Fillet, Home Run, Auto Dimension and Line Cutter to the RZ Tools Electrical panel.
+**Goal:** Add Junction Box, Convert Line, Connect Conduit, Multi Fillet, Home Run, Auto Dimension and Line Cutter to the Falcon Electrical panel.
 
-**Architecture:** Same as batch 1 — every geometric decision is a Revit-free function in `rzgeom.py` (pytest-covered); Revit work goes through `rzconduit.py` helpers and runs all-or-nothing per element (`rzconduit.all_or_nothing`) inside one `TransactionGroup` per run.
+**Architecture:** Same as batch 1 — every geometric decision is a Revit-free function in `falcon_geom.py` (pytest-covered); Revit work goes through `falcon_conduit.py` helpers and runs all-or-nothing per element (`falcon_conduit.all_or_nothing`) inside one `TransactionGroup` per run.
 
 **Tech Stack:** pyRevit, IronPython 2.7, Revit API 2020–2027; CPython 3.12 + pytest + pyflakes offline.
 
@@ -16,7 +16,7 @@
 - Must run on **Revit 2020–2027**: any API that changed between versions goes through a `getattr`/`try` fallback (e.g. `MEPModel.GetElectricalSystems()` 2021+ vs `MEPModel.ElectricalSystems` 2020).
 - Conduit height for new conduits is set through `RBS_OFFSET_PARAM` (Middle Elevation, relative to the conduit's reference level), never by guessing level elevations.
 - Annotation tools (Home Run, Auto Dimension, Line Cutter) only work in plan views (`ViewPlan`); other views → alert and exit.
-- Tool markers: Line Cutter masks carry Comments = `RZ_LINE_CUTTER`; Home Run text carries nothing special (plain text note).
+- Tool markers: Line Cutter masks carry Comments = `FALCON_LINE_CUTTER`; Home Run text carries nothing special (plain text note).
 
 ## Review Focus
 
@@ -30,7 +30,7 @@
 
 ### Task 1: Geometry for Junction Box, Convert Line, Connect Conduit
 
-**Files:** Modify `RZTools.extension/lib/rzgeom.py`; Create `tests/test_rzgeom_batch2.py`
+**Files:** Modify `Falcon.extension/lib/falcon_geom.py`; Create `tests/test_falcon_geom_batch2.py`
 
 **Interfaces (Produces):**
 - `project_distance(p0, p1, point) -> float` — distance from p0 along p0→p1 of point's projection, clamped to [0, length].
@@ -62,7 +62,7 @@
 
 ### Task 2: Geometry for Multi Fillet, Home Run, Auto Dimension, Line Cutter
 
-**Files:** Modify `RZTools.extension/lib/rzgeom.py`; Create `tests/test_rzgeom_batch3.py`
+**Files:** Modify `Falcon.extension/lib/falcon_geom.py`; Create `tests/test_falcon_geom_batch3.py`
 
 **Interfaces (Produces):**
 - `pair_bundles(lines_a, lines_b) -> list[(ia, ib)]` — lines = list of `(p0, p1)`. Corner P = `line_intersection_xy` of `lines_a[0]` and `lines_b[0]`. `dA` = unit plan direction of bundle A pointing away from P (toward the end of `lines_a[0]` farther from P); same for `dB`. Inside offset of an A line = dot(its midpoint − P, dB); of a B line = dot(midpoint − P, dA). Sort each bundle by inside offset descending and pair index by index. Raises `ValueError("bundles have different counts")` if lengths differ, `ValueError("bundles are parallel")` if no corner.
@@ -99,9 +99,9 @@
 - [ ] **Step 2–4:** FAIL → implement → PASS (whole suite).
 - [ ] **Step 5: Commit** `feat: add geometry for fillet, home run, dimensions, line cutter`
 
-### Task 3: rzconduit additions
+### Task 3: falcon_conduit additions
 
-**Files:** Modify `RZTools.extension/lib/rzconduit.py`
+**Files:** Modify `Falcon.extension/lib/falcon_conduit.py`
 
 **Interfaces (Produces):**
 - `place_box_at_end(doc, symbol, conduit, end_point) -> (inst, connected)` — place box, if it has ≥1 free conduit connector: rotate so that connector's BasisZ points from the end back along the conduit (toward the conduit body), move so the connector origin is on end_point, `ConnectTo` the conduit's end connector (raise on failure); else just align with the conduit (connected False).
@@ -115,12 +115,12 @@
 
 ### Task 4: Junction Box pushbutton (`D_JunctionBox.pushbutton`)
 
-Flow: `box_symbols` → `forms.SelectFromList.show(labels, title=..., multiselect=False)` defaulting to the remembered label (section `rztools_junctionbox`, key `box_label`) → loop `PickObject(ObjectType.Element, ConduitFilter(), "Click a conduit where the junction box goes (Esc to finish)")`; for each pick: `dist = project_distance`; `snap_end(L, dist, mm_to_ft(300))` → 0/1: `place_box_at_end` at that end; None: `place_box` at the projected point. Each pick = one `all_or_nothing` inside the run's TransactionGroup (one Transaction per pick so the box appears immediately; the group is assimilated at Esc → one undo). Report count placed / connected / skipped.
+Flow: `box_symbols` → `forms.SelectFromList.show(labels, title=..., multiselect=False)` defaulting to the remembered label (section `falcon_junctionbox`, key `box_label`) → loop `PickObject(ObjectType.Element, ConduitFilter(), "Click a conduit where the junction box goes (Esc to finish)")`; for each pick: `dist = project_distance`; `snap_end(L, dist, mm_to_ft(300))` → 0/1: `place_box_at_end` at that end; None: `place_box` at the projected point. Each pick = one `all_or_nothing` inside the run's TransactionGroup (one Transaction per pick so the box appears immediately; the group is assimilated at Esc → one undo). Report count placed / connected / skipped.
 - [ ] script.py, bundle.yaml → pyflakes → **Commit** `feat: add Junction Box tool`
 
 ### Task 5: Convert Line pushbutton (`C_ConvertLine.pushbutton`)
 
-Flow: `CommandSwitchWindow` "Revit lines" / "CAD lines". Revit lines: pre-selection or `PickObjects(ObjectType.Element, CurveElementFilter)` (model + detail lines). CAD lines: `PickObjects(ObjectType.PointOnElement, ImportFilter)`, each ref → `ImportInstance.GetGeometryObjectFromReference(ref)`, transformed by `GetTotalTransform()`. Only `DB.Line` kept; arcs/others counted as skipped. Dialog `ConvertLine.xaml`: conduit type (combo), diameter mm (default 20), middle elevation mm (default 3000), ☑ add fittings at touching ends (default on). Remembered (section `rztools_convertline`). Level = `doc.ActiveView.GenLevel` (no level → alert). For each line: `new_conduit` with z = 0 points flattened, then `set_middle_elevation`. Then for `joint_pairs(segs, mm_to_ft(5))`: `joint_kind` → `connect_union` or `connect_elbow`; failure per joint listed, conduits kept (the conduits themselves are still valid). Report "Created N conduit(s), M fitting(s). Skipped: K arc/other line(s); joints that failed: …".
+Flow: `CommandSwitchWindow` "Revit lines" / "CAD lines". Revit lines: pre-selection or `PickObjects(ObjectType.Element, CurveElementFilter)` (model + detail lines). CAD lines: `PickObjects(ObjectType.PointOnElement, ImportFilter)`, each ref → `ImportInstance.GetGeometryObjectFromReference(ref)`, transformed by `GetTotalTransform()`. Only `DB.Line` kept; arcs/others counted as skipped. Dialog `ConvertLine.xaml`: conduit type (combo), diameter mm (default 20), middle elevation mm (default 3000), ☑ add fittings at touching ends (default on). Remembered (section `falcon_convertline`). Level = `doc.ActiveView.GenLevel` (no level → alert). For each line: `new_conduit` with z = 0 points flattened, then `set_middle_elevation`. Then for `joint_pairs(segs, mm_to_ft(5))`: `joint_kind` → `connect_union` or `connect_elbow`; failure per joint listed, conduits kept (the conduits themselves are still valid). Report "Created N conduit(s), M fitting(s). Skipped: K arc/other line(s); joints that failed: …".
 - [ ] script.py, ConvertLine.xaml, bundle.yaml → pyflakes + XAML parse → **Commit** `feat: add Convert Line tool`
 
 ### Task 6: Connect Conduit pushbutton (`B_ConnectConduit.pushbutton`)
@@ -138,17 +138,17 @@ Flow: `PickObjects` bundle A ("Select the first group of parallel conduits, then
 
 ### Task 8: Home Run pushbutton (`G_HomeRun.pushbutton`)
 
-Plan views only. Loop `PickObject` (elements with `MEPModel`) until Esc. Systems: `GetElectricalSystems()` if present else `ElectricalSystems`; first power system with `BaseEquipment`. Label `home_run_label(sys.PanelName, sys.CircuitNumber)`; None → listed "no circuit/panel". Arrow from device location point toward panel location (plan), `arrow_points(start, panel, length, mm_to_ft(150))`; draw 3 detail lines (`doc.Create.NewDetailCurve`) at the view's plane z (`view.GenLevel` plane via `SketchPlane` if present, else device z) ; text note `TextNote.Create(doc, view.Id, shaft_end + small offset, label, default TextNoteType)`. Length setting [600 mm] via Shift+click `config.py` (section `rztools_homerun`).
+Plan views only. Loop `PickObject` (elements with `MEPModel`) until Esc. Systems: `GetElectricalSystems()` if present else `ElectricalSystems`; first power system with `BaseEquipment`. Label `home_run_label(sys.PanelName, sys.CircuitNumber)`; None → listed "no circuit/panel". Arrow from device location point toward panel location (plan), `arrow_points(start, panel, length, mm_to_ft(150))`; draw 3 detail lines (`doc.Create.NewDetailCurve`) at the view's plane z (`view.GenLevel` plane via `SketchPlane` if present, else device z) ; text note `TextNote.Create(doc, view.Id, shaft_end + small offset, label, default TextNoteType)`. Length setting [600 mm] via Shift+click `config.py` (section `falcon_homerun`).
 - [ ] script.py, config.py, bundle.yaml → pyflakes → **Commit** `feat: add Home Run tool`
 
 ### Task 9: Auto Dimension pushbutton (`A_AutoDimension.pushbutton`)
 
-Plan views only. Conduits = straight, horizontal, from selection or all visible in the view. `bundles(lines, mm_to_ft(1000))`. Per bundle: direction d, perpendicular n; nearest parallel Grid (plan direction parallel within 1°, perpendicular distance ≤ 10 m) → reference `DB.Reference(grid)`; else nearest parallel wall within 10 m → its nearer side face reference (`HostObjectUtils.GetSideFaces`); none → skipped "no grid or wall within 10 m". References: grid/wall + `DB.Reference(conduit)` for each conduit in the bundle. Dimension line through the first conduit's midpoint moved along d by the offset setting [500 mm], running along n from the grid/wall to past the farthest conduit. `doc.Create.NewDimension(view, line, ReferenceArray)`; per-bundle all-or-nothing. Offset setting via Shift+click `config.py` (section `rztools_autodim`).
+Plan views only. Conduits = straight, horizontal, from selection or all visible in the view. `bundles(lines, mm_to_ft(1000))`. Per bundle: direction d, perpendicular n; nearest parallel Grid (plan direction parallel within 1°, perpendicular distance ≤ 10 m) → reference `DB.Reference(grid)`; else nearest parallel wall within 10 m → its nearer side face reference (`HostObjectUtils.GetSideFaces`); none → skipped "no grid or wall within 10 m". References: grid/wall + `DB.Reference(conduit)` for each conduit in the bundle. Dimension line through the first conduit's midpoint moved along d by the offset setting [500 mm], running along n from the grid/wall to past the farthest conduit. `doc.Create.NewDimension(view, line, ReferenceArray)`; per-bundle all-or-nothing. Offset setting via Shift+click `config.py` (section `falcon_autodim`).
 - [ ] script.py, config.py, bundle.yaml → pyflakes → **Commit** `feat: add Auto Dimension tool`
 
 ### Task 10: Line Cutter pushbutton (`F_LineCutter.pushbutton`)
 
-Plan views only. Scope: selected conduits, else all conduits visible in the view. Delete previous filled regions in this view whose Comments = `RZ_LINE_CUTTER`. Mask type: FilledRegionType named `RZ Mask` (create by duplicating the first FilledRegionType: foreground = solid fill, white; background none; `IsMasking = True` where the property exists). For every crossing pair (`plan_intersection`): lower = smaller (z + r) top; rectangle `mask_rect(X, lower_dir, (upper_dia + 2*gap)/crossing_sin, lower_dia + mm_to_ft(20))` at the view plane z; `FilledRegion.Create(doc, type_id, view.Id, [CurveLoop])`; set its line style to `<Invisible lines>` when found; Comments = `RZ_LINE_CUTTER`. Gap setting [50 mm] via Shift+click `config.py` (section `rztools_linecutter`). Report masks created / removed.
+Plan views only. Scope: selected conduits, else all conduits visible in the view. Delete previous filled regions in this view whose Comments = `FALCON_LINE_CUTTER`. Mask type: FilledRegionType named `Falcon Mask` (create by duplicating the first FilledRegionType: foreground = solid fill, white; background none; `IsMasking = True` where the property exists). For every crossing pair (`plan_intersection`): lower = smaller (z + r) top; rectangle `mask_rect(X, lower_dir, (upper_dia + 2*gap)/crossing_sin, lower_dia + mm_to_ft(20))` at the view plane z; `FilledRegion.Create(doc, type_id, view.Id, [CurveLoop])`; set its line style to `<Invisible lines>` when found; Comments = `FALCON_LINE_CUTTER`. Gap setting [50 mm] via Shift+click `config.py` (section `falcon_linecutter`). Report masks created / removed.
 - [ ] script.py, config.py, bundle.yaml → pyflakes → **Commit** `feat: add Line Cutter tool`
 
 ### Task 11: Icons, README, checklists

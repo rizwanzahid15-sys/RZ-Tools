@@ -27,7 +27,7 @@
 # Dependencies   :
 #   - pyRevit
 #   - Revit API
-#   - Falcon.extension/lib/rzgeom.py, rzconduit.py, rzsettings.py
+#   - Falcon.extension/lib/falcon_geom.py, falcon_conduit.py, falcon_settings.py
 #
 # Features       :
 #   - Crossings close together share one offset
@@ -49,12 +49,12 @@ from pyrevit import revit, DB, forms, script
 from Autodesk.Revit.UI.Selection import ObjectType
 from Autodesk.Revit.Exceptions import OperationCanceledException
 
-import rzgeom
-import rzconduit
-import rzsettings
+import falcon_geom
+import falcon_conduit
+import falcon_settings
 
 TITLE = "Falcon - Conduit Cutter"
-SECTION = "rztools_cutter"
+SECTION = "falcon_cutter"
 DEFAULTS = {"clearance_mm": 50.0, "angle_deg": 30.0}
 END_MARGIN_MM = 100.0
 
@@ -64,11 +64,11 @@ uidoc = revit.uidoc
 
 def selected_conduits():
     picked = [doc.GetElement(i) for i in uidoc.Selection.GetElementIds()]
-    picked = [e for e in picked if rzconduit.is_conduit(e)]
+    picked = [e for e in picked if falcon_conduit.is_conduit(e)]
     if picked:
         return picked
     refs = uidoc.Selection.PickObjects(
-        ObjectType.Element, rzconduit.ConduitFilter(),
+        ObjectType.Element, falcon_conduit.ConduitFilter(),
         "Select the crossing straight conduits, then click Finish")
     return [doc.GetElement(r.ElementId) for r in refs]
 
@@ -78,11 +78,11 @@ class Run(object):
 
     def __init__(self, conduit):
         self.conduit = conduit
-        p0, p1 = rzconduit.ends(conduit)
-        self.p0, self.p1 = rzconduit.tup(p0), rzconduit.tup(p1)
-        self.dir = rzgeom.vsub(self.p1, self.p0)
-        self.length = rzgeom.vlen(self.dir)
-        self.radius = rzconduit.outer_radius(conduit)
+        p0, p1 = falcon_conduit.ends(conduit)
+        self.p0, self.p1 = falcon_conduit.tup(p0), falcon_conduit.tup(p1)
+        self.dir = falcon_geom.vsub(self.p1, self.p0)
+        self.length = falcon_geom.vlen(self.dir)
+        self.radius = falcon_conduit.outer_radius(conduit)
         self.z = (self.p0[2] + self.p1[2]) / 2.0
 
     def z_at(self, t):
@@ -96,26 +96,26 @@ def plan_offset(mover, others, clearance, angle, up):
     crossings = []
     stack = []
     for other in others:
-        hit = rzgeom.plan_intersection(mover.p0, mover.p1, other.p0, other.p1)
+        hit = falcon_geom.plan_intersection(mover.p0, mover.p1, other.p0, other.p1)
         if hit is None:
             continue
         t, u = hit
-        sin = rzgeom.crossing_sin(mover.dir, other.dir)
+        sin = falcon_geom.crossing_sin(mover.dir, other.dir)
         half = (other.radius + clearance + mover.radius) / sin
         crossings.append((t * mover.length, half))
         stack.append((other.z_at(u), other.radius))
     if not crossings:
         raise ValueError("does not cross the other group")
-    rise = rzgeom.required_rise(mover.z, mover.radius, stack, clearance, up)
+    rise = falcon_geom.required_rise(mover.z, mover.radius, stack, clearance, up)
     if rise == 0.0:
         raise ValueError("already clear of the other group")
-    run = rzgeom.slope_run(rise, angle)
-    end_clear = 2 * mover.radius + rzgeom.mm_to_ft(END_MARGIN_MM)
+    run = falcon_geom.slope_run(rise, angle)
+    end_clear = 2 * mover.radius + falcon_geom.mm_to_ft(END_MARGIN_MM)
     try:
-        spans = rzgeom.offset_spans(mover.length, crossings, run, end_clear)
+        spans = falcon_geom.offset_spans(mover.length, crossings, run, end_clear)
     except ValueError:
         raise ValueError("crossing too close to the conduit end")
-    points = rzgeom.dogleg_polyline(mover.p0, mover.p1, spans, rise, run)
+    points = falcon_geom.dogleg_polyline(mover.p0, mover.p1, spans, rise, run)
     return points, len(spans), len(crossings)
 
 
@@ -124,24 +124,24 @@ def build_offset(conduit, points):
 
     Raises on any failure; the caller runs it all-or-nothing so a failed
     conduit is put back exactly as it was."""
-    xyz = rzconduit.xyz
-    far = rzconduit.end_connector(conduit, xyz(points[-1]))
-    far_links = rzconduit.connected_others(far)
+    xyz = falcon_conduit.xyz
+    far = falcon_conduit.end_connector(conduit, xyz(points[-1]))
+    far_links = falcon_conduit.connected_others(far)
     for link in far_links:
         far.DisconnectFrom(link)
 
-    rzconduit.set_ends(conduit, xyz(points[0]), xyz(points[1]))
+    falcon_conduit.set_ends(conduit, xyz(points[0]), xyz(points[1]))
     pieces = [conduit]
     for a, b in zip(points[1:-1], points[2:]):
-        pieces.append(rzconduit.new_conduit_like(doc, conduit, xyz(a), xyz(b)))
+        pieces.append(falcon_conduit.new_conduit_like(doc, conduit, xyz(a), xyz(b)))
 
-    last_end = rzconduit.end_connector(pieces[-1], xyz(points[-1]))
+    last_end = falcon_conduit.end_connector(pieces[-1], xyz(points[-1]))
     for link in far_links:
         last_end.ConnectTo(link)
 
     doc.Regenerate()
     for a, b in zip(pieces, pieces[1:]):
-        if rzconduit.connect_elbow(doc, a, b) is None:
+        if falcon_conduit.connect_elbow(doc, a, b) is None:
             raise ValueError(
                 "Revit could not make an elbow here (check the conduit type's "
                 "elbow family and bend radius, or use a smaller angle)")
@@ -167,8 +167,8 @@ def main():
     if doc is None:
         forms.alert("Please open a Revit project first.", title=TITLE)
         return
-    settings = rzsettings.load(SECTION, DEFAULTS)
-    clearance = rzgeom.mm_to_ft(settings["clearance_mm"])
+    settings = falcon_settings.load(SECTION, DEFAULTS)
+    clearance = falcon_geom.mm_to_ft(settings["clearance_mm"])
     angle = settings["angle_deg"]
 
     try:
@@ -182,12 +182,12 @@ def main():
             skipped.append(u"{}: not straight".format(c.Id))
             continue
         run = Run(c)
-        if rzgeom.is_vertical(run.dir):
+        if falcon_geom.is_vertical(run.dir):
             skipped.append(u"{}: vertical".format(c.Id))
             continue
         runs.append(run)
 
-    groups = rzgeom.group_by_direction([r.dir for r in runs]) if runs else []
+    groups = falcon_geom.group_by_direction([r.dir for r in runs]) if runs else []
     if len(groups) != 2:
         forms.alert("Select two sets of conduits that cross each other.", title=TITLE)
         return
@@ -217,7 +217,7 @@ def main():
                     skipped.append(u"{}: {}".format(mover.conduit.Id, reason))
                     continue
                 try:
-                    rzconduit.all_or_nothing(
+                    falcon_conduit.all_or_nothing(
                         doc, lambda: build_offset(mover.conduit, points))
                 except Exception as ex:
                     skipped.append(u"{}: {}".format(mover.conduit.Id, ex))

@@ -177,11 +177,11 @@ Falcon.extension/
           B_BlueMarkup.pushbutton/
           C_Clear.pushbutton/
   lib/
-    rztools_markup.py               (Markup tools)
-    rzgeom.py, rznaming.py          (pure maths/naming - tested offline)
-    rzconduit.py, rzcolor.py        (Revit conduit and colour helpers)
-    rzsettings.py                   (remembered settings)
-    rzview.py                       (plan-view / annotation helpers)
+    falcon_markup.py               (Markup tools)
+    falcon_geom.py, falcon_naming.py          (pure maths/naming - tested offline)
+    falcon_conduit.py, falcon_color.py        (Revit conduit and colour helpers)
+    falcon_settings.py                   (remembered settings)
+    falcon_view.py                       (plan-view / annotation helpers)
 tests/                              (pytest: maths, naming, ribbon layout)
 docs/testing/                       (manual test checklists for Revit)
 ```

@@ -28,7 +28,7 @@
 # Dependencies   :
 #   - pyRevit
 #   - Revit API
-#   - Falcon.extension/lib/rztools_markup.py
+#   - Falcon.extension/lib/falcon_markup.py
 #
 # Features       :
 #   - Redlines elements already selected before the tool is run
@@ -51,7 +51,7 @@
 # ============================================================
 
 from pyrevit import DB
-import rztools_markup as markup
+import falcon_markup as markup
 
 RED = DB.Color(255, 0, 0)
 

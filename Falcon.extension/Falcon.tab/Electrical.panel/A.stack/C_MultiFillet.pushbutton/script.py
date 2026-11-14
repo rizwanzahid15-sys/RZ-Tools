@@ -26,7 +26,7 @@
 #
 # Dependencies   :
 #   - pyRevit, Revit API
-#   - Falcon.extension/lib/rzgeom.py, rzconduit.py
+#   - Falcon.extension/lib/falcon_geom.py, falcon_conduit.py
 #
 # Features       :
 #   - Pairs inner-with-inner whatever order you picked them in
@@ -48,50 +48,50 @@ from pyrevit import revit, DB, forms, script
 from Autodesk.Revit.UI.Selection import ObjectType
 from Autodesk.Revit.Exceptions import OperationCanceledException
 
-import rzgeom
-import rzconduit
+import falcon_geom
+import falcon_conduit
 
 TITLE = "Falcon - Multi Fillet"
 RADIUS_PARAM = "Bend Radius"
 
 doc = revit.doc
 uidoc = revit.uidoc
-tup = rzconduit.tup
-xyz = rzconduit.xyz
+tup = falcon_conduit.tup
+xyz = falcon_conduit.xyz
 
 
 def pick_group(prompt):
-    refs = uidoc.Selection.PickObjects(ObjectType.Element, rzconduit.ConduitFilter(), prompt)
+    refs = uidoc.Selection.PickObjects(ObjectType.Element, falcon_conduit.ConduitFilter(), prompt)
     conduits = [doc.GetElement(r.ElementId) for r in refs]
     return [c for c in conduits if isinstance(c.Location.Curve, DB.Line)]
 
 
 def as_lines(conduits):
-    return [tuple(tup(p) for p in rzconduit.ends(c)) for c in conduits]
+    return [tuple(tup(p) for p in falcon_conduit.ends(c)) for c in conduits]
 
 
 def fillet_pair(a, b):
     """Trim/extend a and b to their plan corner and join with an elbow."""
     la, lb = as_lines([a])[0], as_lines([b])[0]
-    corner = rzgeom.line_intersection_xy(la[0], la[1], lb[0], lb[1])
-    tol = rzgeom.mm_to_ft(5)
+    corner = falcon_geom.line_intersection_xy(la[0], la[1], lb[0], lb[1])
+    tol = falcon_geom.mm_to_ft(5)
     for line, c in ((la, a), (lb, b)):
-        if rzgeom.is_vertical(rzgeom.vsub(line[1], line[0])) or abs(line[0][2] - line[1][2]) > tol:
+        if falcon_geom.is_vertical(falcon_geom.vsub(line[1], line[0])) or abs(line[0][2] - line[1][2]) > tol:
             raise ValueError("conduit {} is not level".format(c.Id))
     if abs(la[0][2] - lb[0][2]) > tol:
         raise ValueError("conduits {} and {} are at different heights".format(a.Id, b.Id))
     corner = (corner[0], corner[1], la[0][2])
     for line, c in ((la, a), (lb, b)):
         p0, p1 = line
-        near_is_0 = rzgeom.vlen(rzgeom.vsub(p0, corner)) <= rzgeom.vlen(rzgeom.vsub(p1, corner))
-        if rzconduit.end_connector(c, xyz(p0 if near_is_0 else p1)).IsConnected:
+        near_is_0 = falcon_geom.vlen(falcon_geom.vsub(p0, corner)) <= falcon_geom.vlen(falcon_geom.vsub(p1, corner))
+        if falcon_conduit.end_connector(c, xyz(p0 if near_is_0 else p1)).IsConnected:
             raise ValueError("conduit {} is already connected at the corner end".format(c.Id))
         if near_is_0:
-            rzconduit.set_ends(c, xyz(corner), xyz(p1))
+            falcon_conduit.set_ends(c, xyz(corner), xyz(p1))
         else:
-            rzconduit.set_ends(c, xyz(p0), xyz(corner))
+            falcon_conduit.set_ends(c, xyz(p0), xyz(corner))
     doc.Regenerate()
-    elbow = rzconduit.connect_elbow(doc, a, b)
+    elbow = falcon_conduit.connect_elbow(doc, a, b)
     if elbow is None:
         raise ValueError("Revit could not add an elbow between {} and {}".format(a.Id, b.Id))
     return elbow
@@ -119,21 +119,21 @@ def main():
                     "({} and {} selected).".format(len(group_a), len(group_b)), title=TITLE)
         return
     lines_a, lines_b = as_lines(group_a), as_lines(group_b)
-    if any(rzgeom.is_vertical(rzgeom.vsub(l[1], l[0])) for l in lines_a + lines_b):
+    if any(falcon_geom.is_vertical(falcon_geom.vsub(l[1], l[0])) for l in lines_a + lines_b):
         forms.alert("Select horizontal conduits only (a vertical conduit was picked).",
                     title=TITLE)
         return
-    if (len(rzgeom.group_by_direction([rzgeom.vsub(l[1], l[0]) for l in lines_a])) != 1
-            or len(rzgeom.group_by_direction([rzgeom.vsub(l[1], l[0]) for l in lines_b])) != 1):
+    if (len(falcon_geom.group_by_direction([falcon_geom.vsub(l[1], l[0]) for l in lines_a])) != 1
+            or len(falcon_geom.group_by_direction([falcon_geom.vsub(l[1], l[0]) for l in lines_b])) != 1):
         forms.alert("Each group must be conduits running in the same direction.", title=TITLE)
         return
     try:
-        pairs = rzgeom.pair_bundles(lines_a, lines_b)
+        pairs = falcon_geom.pair_bundles(lines_a, lines_b)
     except ValueError:
         forms.alert("The two groups run in the same direction - they don't meet at a corner.",
                     title=TITLE)
         return
-    spacing = rzgeom.bundle_spacing(lines_a)
+    spacing = falcon_geom.bundle_spacing(lines_a)
 
     made, skipped = 0, []
     radius_note = False
@@ -143,7 +143,7 @@ def main():
             for k, (ia, ib) in enumerate(pairs):
                 a, b = group_a[ia], group_b[ib]
                 try:
-                    elbow = rzconduit.all_or_nothing(doc, lambda: fillet_pair(a, b))
+                    elbow = falcon_conduit.all_or_nothing(doc, lambda: fillet_pair(a, b))
                 except Exception as ex:
                     skipped.append(u"{} / {}: {}".format(a.Id, b.Id, ex))
                     continue
@@ -160,7 +160,7 @@ def main():
                     radius_note = True
                 else:
                     try:
-                        if not rzconduit.all_or_nothing(
+                        if not falcon_conduit.all_or_nothing(
                                 doc, lambda: set_radius(elbow, inner_radius + k * spacing)):
                             radius_note = True
                     except Exception:

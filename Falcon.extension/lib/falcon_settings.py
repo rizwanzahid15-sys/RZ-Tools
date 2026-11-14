@@ -1,7 +1,7 @@
 # ============================================================
 # Shared Library
 # ============================================================
-# Module Name    : rzsettings
+# Module Name    : falcon_settings
 # Purpose        : Remember per-tool settings (last dialog values,
 #                  Shift+click options) in the pyRevit user config.
 # Author         : Rizwan Zahid
